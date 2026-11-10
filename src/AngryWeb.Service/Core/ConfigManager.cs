@@ -64,6 +64,14 @@ public class ConfigManager
                     _config = loaded;
                     _config.LocalRules ??= new List<RuleDefinition>();
                     _config.Rules ??= new List<RuleDefinition>();
+
+                    // 구버전 평문 비밀번호가 저장되어 있다면 자동으로 SHA-256 솔트 해시로 변환하여 파일 저장
+                    if (!string.IsNullOrEmpty(_config.MasterPasswordHash) && !_config.MasterPasswordHash.StartsWith("sha256:"))
+                    {
+                        _config.MasterPasswordHash = PasswordHelper.HashPassword(_config.MasterPasswordHash);
+                        SaveLocalConfig();
+                    }
+
                     _logger.LogInformation("Loaded local configuration from {Path}", _localConfigPath);
                     return;
                 }
@@ -76,6 +84,7 @@ public class ConfigManager
 
         _config = new FilterConfig
         {
+            MasterPasswordHash = PasswordHelper.HashPassword("angryweb"),
             LocalRules = new List<RuleDefinition>
             {
                 new() { Pattern = "youtube.com/shorts/*", Description = "YouTube Shorts 차단", Enabled = true },
@@ -102,14 +111,14 @@ public class ConfigManager
 
     public bool UpdatePassword(string oldPassword, string newPassword)
     {
-        if (!string.Equals(_config.MasterPasswordHash, oldPassword, StringComparison.Ordinal))
+        if (!PasswordHelper.VerifyPassword(_config.MasterPasswordHash, oldPassword))
         {
             return false;
         }
 
-        _config.MasterPasswordHash = newPassword;
+        _config.MasterPasswordHash = PasswordHelper.HashPassword(newPassword);
         SaveLocalConfig();
-        _logger.LogInformation("Master password updated successfully.");
+        _logger.LogInformation("Master password updated successfully with SHA-256 hash.");
         return true;
     }
 

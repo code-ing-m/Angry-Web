@@ -122,7 +122,7 @@ public class BlockPageServer
             {
                 using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
                 var body = await reader.ReadToEndAsync();
-                var data = JsonSerializer.Deserialize<LoginRequest>(body);
+                var data = JsonSerializer.Deserialize<LoginRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                 if (data != null && IsPasswordValid(data.Password))
                 {
@@ -263,8 +263,11 @@ public class BlockPageServer
 
     private bool IsPasswordValid(string? password)
     {
+        if (string.IsNullOrEmpty(password))
+            return false;
+
         var master = _configManager.CurrentConfig.MasterPasswordHash;
-        return string.Equals(master, password, StringComparison.Ordinal);
+        return PasswordHelper.VerifyPassword(master, password);
     }
 
     private bool IsSessionValid(HttpListenerRequest req)

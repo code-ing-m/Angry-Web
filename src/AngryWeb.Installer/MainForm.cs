@@ -180,8 +180,16 @@ public partial class MainForm : Form
         {
             try
             {
-                // 1. 기존 서비스 중지
+                // 1. 기존 서비스 중지 및 프로세스 완전 종료 대기
                 RunCmd("sc.exe", $"stop {ServiceName}");
+                for (int i = 0; i < 10; i++)
+                {
+                    Thread.Sleep(500);
+                    var query = RunCmd("sc.exe", $"query {ServiceName}");
+                    if (!query.Contains("RUNNING")) break;
+                }
+                // 만약 여전히 잡혀있다면 강제 종료 시도
+                RunCmd("taskkill.exe", "/F /IM AngryWeb.Service.exe");
                 Thread.Sleep(1000);
 
                 // 2. 디렉토리 생성
@@ -336,6 +344,10 @@ public partial class MainForm : Form
     {
         try
         {
+            var installDir = Path.GetDirectoryName(targetExe) ?? @"C:\Program Files\AngryWeb";
+            var iconPath = Path.Combine(installDir, "app.ico");
+            IconGenerator.EnsureAppIcon(iconPath);
+
             // 1. 공용 시작 메뉴 및 현재 사용자 시작 메뉴 폴더 모두 등록
             var paths = new List<string>
             {
@@ -363,40 +375,35 @@ public partial class MainForm : Form
                     if (!Directory.Exists(dir))
                         Directory.CreateDirectory(dir);
 
-                    // .url 파일은 외부 스크립트나 COM 객체 없이 OS 네이티브 텍스트 포맷으로 100% 즉시 생성됨
+                    // .url 파일에 예쁜 방패 아이콘 경로 지정
                     var urlPath = Path.Combine(dir, "Angry Web.url");
                     var content = $"""
 [InternetShortcut]
 URL=http://127.0.0.1:8898/dashboard
 IconIndex=0
-IconFile={targetExe}
+IconFile={iconPath}
 """;
                     File.WriteAllText(urlPath, content, Encoding.ASCII);
-                }
-                catch { }
-            }
 
-            // WScript.Shell을 통한 .lnk 도 보조 생성 시도
-            try
-            {
-                var commonDir = Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms);
-                var lnkPath = Path.Combine(commonDir, "Angry Web.lnk");
-                var ps = $"""
+                    // WScript.Shell을 통한 .lnk 생성 (아이콘 및 대시보드 연결)
+                    var lnkPath = Path.Combine(dir, "Angry Web.lnk");
+                    var ps = $"""
 $w = New-Object -ComObject WScript.Shell
 $s = $w.CreateShortcut('{lnkPath}')
 $s.TargetPath = 'cmd.exe'
 $s.Arguments = '/c start http://127.0.0.1:8898/dashboard'
-$s.Description = 'Angry Web 대시보드'
-$s.IconLocation = '{targetExe},0'
+$s.Description = 'Angry Web 사이트 차단 및 관리 대시보드'
+$s.IconLocation = '{iconPath},0'
 $s.WindowStyle = 7
 $s.Save()
 """;
-                var tempFile = Path.Combine(Path.GetTempPath(), "mklink.ps1");
-                File.WriteAllText(tempFile, ps);
-                RunCmd("powershell.exe", $"-ExecutionPolicy Bypass -NoProfile -File \"{tempFile}\"");
-                try { File.Delete(tempFile); } catch { }
+                    var tempFile = Path.Combine(Path.GetTempPath(), "mklink.ps1");
+                    File.WriteAllText(tempFile, ps);
+                    RunCmd("powershell.exe", $"-ExecutionPolicy Bypass -NoProfile -File \"{tempFile}\"");
+                    try { File.Delete(tempFile); } catch { }
+                }
+                catch { }
             }
-            catch { }
         }
         catch { }
     }
