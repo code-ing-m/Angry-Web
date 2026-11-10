@@ -1,191 +1,196 @@
 {
-  "MasterPasswordHash": "angryweb",
-  "GitHubRulesUrl": "https://raw.githubusercontent.com/code-ing-m/Angry-Web/main/rules.json",
-  "ProxyPort": 8899,
-  "BlockPagePort": 8898,
-  "SyncIntervalMinutes": 10,
-  "Rules": [
-    {
-      "Pattern": "youtube.com/shorts/*",
-      "Description": "유튜브 쇼츠 차단",
-      "Enabled": true
-    },
-    {
-      "Pattern": "*.tiktok.com/*",
-      "Description": "틱톡 전체 및 서브도메인 차단",
-      "Enabled": true
-    },
-    {
-      "Pattern": "instagram.com/reels/*",
-      "Description": "인스타그램 릴스 차단",
-      "Enabled": true
-    },
-    {
-      "Pattern": "*chzzk.naver.com*",
-      "Description": "치지직 라이브 방송 차단",
-      "Enabled": true
-    },
-    {
-      "Pattern": "youtube.com/ (++ watch ++ v=game) | gaming",
-      "Description": "유튜브 게임 관련 복합 조건 차단",
-      "Enabled": true
-    },
-    {
-      "Pattern": "*.crazygames.com/*",
-      "Description": "크레이지게임즈 (CrazyGames)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.poki.com/*",
-      "Description": "포키 (Poki)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.y8.com/*",
-      "Description": "Y8 게임즈 (Y8 Games)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.itch.io/*",
-      "Description": "잇치 (itch.io - 무료 인디/웹게임)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.kongregate.com/*",
-      "Description": "콩그리게이트 (Kongregate)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.coolmathgames.com/*",
-      "Description": "쿨매스게임즈 (Coolmath Games)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.addictinggames.com/*",
-      "Description": "어딕팅게임즈 (Addicting Games)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.miniclip.com/*",
-      "Description": "미니클립 (Miniclip)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.gamedistribution.com/*",
-      "Description": "게임디스트리뷰션 (GameDistribution 플랫폼)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.playhop.com/*",
-      "Description": "플레이홉 (Playhop)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.armorgames.com/*",
-      "Description": "아머게임즈 (Armor Games)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.newgrounds.com/*",
-      "Description": "뉴그라운즈 (Newgrounds)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.kizi.com/*",
-      "Description": "키지 (Kizi)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.gamepix.com/*",
-      "Description": "게임픽스 (GamePix)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.silvergames.com/*",
-      "Description": "실버게임즈 (Silvergames)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.youtube.com/*",
-      "Description": "유튜브 영상 및 뮤직",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.netflix.com/*",
-      "Description": "넷플릭스",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.melon.com/*",
-      "Description": "멜론 음악",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.spotify.com/*",
-      "Description": "스포티파이",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.disneyplus.com/*",
-      "Description": "디즈니플러스",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.steampowered.com/*",
-      "Description": "스팀 (Steam)",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.epicgames.com/*",
-      "Description": "에픽게임즈 스토어",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.riotgames.com/*",
-      "Description": "라이엇 게임즈",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.nexon.com/*",
-      "Description": "넥슨",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.plaync.com/*",
-      "Description": "엔씨소프트",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.comic.naver.com/*",
-      "Description": "네이버 웹툰",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.kakao.com/*",
-      "Description": "카카오웹툰 / 카카오페이지",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.lezhin.com/*",
-      "Description": "레진코믹스",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.toomics.com/*",
-      "Description": "투믹스",
-      "Enabled": true
-   },
-   {
-      "Pattern": "*.toptoon.com/*",
-      "Description": "탑툰",
-      "Enabled": true
+   "MasterPasswordHash": "angryweb",
+   "GitHubRulesUrl": "https://raw.githubusercontent.com/code-ing-m/Angry-Web/main/rules.json",
+   "ProxyPort": 8899,
+   "BlockPagePort": 8898,
+   "SyncIntervalMinutes": 10,
+   "Rules": [
+      {
+         "Pattern": "youtube.com/shorts/*",
+         "Description": "유튜브 쇼츠 차단",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.tiktok.com/*",
+         "Description": "틱톡 전체 및 서브도메인 차단",
+         "Enabled": true
+      },
+      {
+         "Pattern": "instagram.com/reels/*",
+         "Description": "인스타그램 릴스 차단",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*chzzk.naver.com*",
+         "Description": "치지직 라이브 방송 차단",
+         "Enabled": true
+      },
+      {
+         "Pattern": "youtube.com/ (++ watch ++ v=game) | gaming",
+         "Description": "유튜브 게임 관련 복합 조건 차단",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.crazygames.com/*",
+         "Description": "크레이지게임즈 (CrazyGames)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.poki.com/*",
+         "Description": "포키 (Poki)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.y8.com/*",
+         "Description": "Y8 게임즈 (Y8 Games)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.itch.io/*",
+         "Description": "잇치 (itch.io - 무료 인디/웹게임)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.kongregate.com/*",
+         "Description": "콩그리게이트 (Kongregate)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.coolmathgames.com/*",
+         "Description": "쿨매스게임즈 (Coolmath Games)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.addictinggames.com/*",
+         "Description": "어딕팅게임즈 (Addicting Games)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.miniclip.com/*",
+         "Description": "미니클립 (Miniclip)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.gamedistribution.com/*",
+         "Description": "게임디스트리뷰션 (GameDistribution 플랫폼)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.playhop.com/*",
+         "Description": "플레이홉 (Playhop)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.armorgames.com/*",
+         "Description": "아머게임즈 (Armor Games)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.newgrounds.com/*",
+         "Description": "뉴그라운즈 (Newgrounds)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.kizi.com/*",
+         "Description": "키지 (Kizi)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.gamepix.com/*",
+         "Description": "게임픽스 (GamePix)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.silvergames.com/*",
+         "Description": "실버게임즈 (Silvergames)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.youtube.com/*",
+         "Description": "유튜브 영상 및 뮤직",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.netflix.com/*",
+         "Description": "넷플릭스",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.melon.com/*",
+         "Description": "멜론 음악",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.spotify.com/*",
+         "Description": "스포티파이",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.disneyplus.com/*",
+         "Description": "디즈니플러스",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.steampowered.com/*",
+         "Description": "스팀 (Steam)",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.epicgames.com/*",
+         "Description": "에픽게임즈 스토어",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.riotgames.com/*",
+         "Description": "라이엇 게임즈",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.nexon.com/*",
+         "Description": "넥슨",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.plaync.com/*",
+         "Description": "엔씨소프트",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.comic.naver.com/*",
+         "Description": "네이버 웹툰",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.kakao.com/*",
+         "Description": "카카오웹툰 / 카카오페이지",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.lezhin.com/*",
+         "Description": "레진코믹스",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.toomics.com/*",
+         "Description": "투믹스",
+         "Enabled": true
+      },
+      {
+         "Pattern": "*.toptoon.com/*",
+         "Description": "탑툰",
+         "Enabled": true
+      },
+      {
+         "Pattern": "blacktoon*",
+         "Description": "블랙툰",
+         "Enabled": true
+      }
+   ],
+   "BlockPage": {
+      "Title": "접속이 차단되었습니다.",
+      "Heading": "집중할 시간입니다!",
+      "SubHeading": "지정된 블랙리스트 정책에 따라 접속이 차단되었습니다.",
+      "Message": "현재 사이트는 몰입 및 생산성을 위해 차단된 사이트입니다. 지금 하는 일에 집중하세요!",
+      "Quote": "오늘 걷지 않으면 내일은 뛰어야 한다."
    }
-  ],
-  "BlockPage": {
-    "Title": "접속이 차단되었습니다.",
-    "Heading": "집중할 시간입니다!",
-    "SubHeading": "지정된 블랙리스트 정책에 따라 접속이 차단되었습니다.",
-    "Message": "현재 사이트는 몰입 및 생산성을 위해 차단된 사이트입니다. 지금 하는 일에 집중하세요!",
-    "Quote": "오늘 걷지 않으면 내일은 뛰어야 한다."
-  }
 }

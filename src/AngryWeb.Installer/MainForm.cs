@@ -215,14 +215,18 @@ public partial class MainForm : Form
                 RunCmd("sc.exe", $"failure {ServiceName} reset= 0 actions= restart/60000/restart/60000/restart/60000");
 
                 // 6. 서비스 시작
-                Invoke(() => { _progressBar.Value = 90; _lblStatus.Text = "서비스 시작 중..."; });
+                Invoke(() => { _progressBar.Value = 85; _lblStatus.Text = "서비스 시작 중..."; });
                 RunCmd("sc.exe", $"start {ServiceName}");
+
+                // 7. 시작 메뉴 바로가기 생성 (Windows 검색에서 Angry Web 앱으로 검색되도록 등록)
+                Invoke(() => { _progressBar.Value = 95; _lblStatus.Text = "시작 메뉴 바로가기 등록 중..."; });
+                CreateStartMenuShortcut(targetExe);
 
                 Invoke(() =>
                 {
                     _progressBar.Value = 100;
                     _lblStatus.Text = "설치가 성공적으로 완료되었습니다!";
-                    MessageBox.Show("Angry Web이 성공적으로 설치되고 백그라운드에서 동작을 시작했습니다!\nPC 부팅 시에도 자동으로 유지됩니다.", "설치 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Angry Web이 성공적으로 설치되고 백그라운드에서 동작을 시작했습니다!\n\n이제 Windows 검색창에 'Angry Web'을 입력하여 대시보드를 바로 실행할 수 있습니다.", "설치 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     CheckCurrentStatus();
                 });
             }
@@ -278,6 +282,7 @@ public partial class MainForm : Form
             {
                 RunCmd("sc.exe", $"stop {ServiceName}");
                 RunCmd("sc.exe", $"delete {ServiceName}");
+                RemoveStartMenuShortcut();
                 Thread.Sleep(1000);
 
                 Invoke(() =>
@@ -324,6 +329,44 @@ public partial class MainForm : Form
 
         using var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write);
         stream.CopyTo(fileStream);
+    }
+
+    private static void CreateStartMenuShortcut(string targetExe)
+    {
+        try
+        {
+            var startMenuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), "Programs");
+            var shortcutPath = Path.Combine(startMenuDir, "Angry Web.lnk");
+
+            // PowerShell WScript.Shell 스크립트로 Windows 검색에 표시될 .lnk 바로가기 생성
+            // 바로가기 실행 시 브라우저에서 대시보드 페이지가 바로 열립니다.
+            var psScript = $"""
+$WshShell = New-Object -ComObject WScript.Shell
+$Shortcut = $WshShell.CreateShortcut('{shortcutPath}')
+$Shortcut.TargetPath = 'cmd.exe'
+$Shortcut.Arguments = '/c start http://127.0.0.1:8898/dashboard'
+$Shortcut.Description = 'Angry Web 사이트 차단 및 관리 대시보드'
+$Shortcut.IconLocation = '{targetExe},0'
+$Shortcut.WindowStyle = 7
+$Shortcut.Save()
+""";
+            var tempPs = Path.Combine(Path.GetTempPath(), "create_angryweb_shortcut.ps1");
+            File.WriteAllText(tempPs, psScript);
+            RunCmd("powershell.exe", $"-ExecutionPolicy Bypass -NoProfile -File \"{tempPs}\"");
+            try { File.Delete(tempPs); } catch { }
+        }
+        catch { }
+    }
+
+    private static void RemoveStartMenuShortcut()
+    {
+        try
+        {
+            var startMenuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), "Programs");
+            var shortcutPath = Path.Combine(startMenuDir, "Angry Web.lnk");
+            if (File.Exists(shortcutPath)) File.Delete(shortcutPath);
+        }
+        catch { }
     }
 
     private static string RunCmd(string exe, string args)

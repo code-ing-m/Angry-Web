@@ -32,15 +32,15 @@ public class Worker : BackgroundService
     private void OnConfigUpdated()
     {
         _logger.LogInformation("Configuration updated, reloading pattern rules...");
-        _patternMatcher.LoadRules(_configManager.CurrentConfig.Rules);
+        _patternMatcher.LoadRules(_configManager.GetActiveRules());
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Angry Web Service is starting at: {time}", DateTimeOffset.Now);
 
-        // 1. Initial rule compile
-        _patternMatcher.LoadRules(_configManager.CurrentConfig.Rules);
+        // 1. Initial rule compile from active rules
+        _patternMatcher.LoadRules(_configManager.GetActiveRules());
 
         // 2. Start Block Page server
         _blockPageServer.Start(_configManager.CurrentConfig.BlockPagePort);

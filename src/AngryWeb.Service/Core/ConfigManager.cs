@@ -24,6 +24,33 @@ public class ConfigManager
         LoadLocalConfig();
     }
 
+    /// <summary>
+    /// 현재 모드(RuleMode)에 맞춰 실제 필터링에 사용할 최종 규칙 목록을 반환합니다.
+    /// </summary>
+    public IEnumerable<RuleDefinition> GetActiveRules()
+    {
+        var mode = _config.RuleMode?.Trim() ?? "Online";
+
+        if (string.Equals(mode, "Local", StringComparison.OrdinalIgnoreCase))
+        {
+            return _config.LocalRules.Where(r => r.Enabled);
+        }
+
+        if (string.Equals(mode, "Hybrid", StringComparison.OrdinalIgnoreCase))
+        {
+            return _config.Rules.Where(r => r.Enabled)
+                .Concat(_config.LocalRules.Where(r => r.Enabled));
+        }
+
+        // Default: Online mode (or fallback to Local if Rules is empty)
+        if (_config.Rules.Count > 0)
+        {
+            return _config.Rules.Where(r => r.Enabled);
+        }
+
+        return _config.LocalRules.Where(r => r.Enabled);
+    }
+
     public void LoadLocalConfig()
     {
         try
@@ -35,6 +62,8 @@ public class ConfigManager
                 if (loaded != null)
                 {
                     _config = loaded;
+                    _config.LocalRules ??= new List<RuleDefinition>();
+                    _config.Rules ??= new List<RuleDefinition>();
                     _logger.LogInformation("Loaded local configuration from {Path}", _localConfigPath);
                     return;
                 }
@@ -45,16 +74,14 @@ public class ConfigManager
             _logger.LogWarning(ex, "Failed to load local config, using defaults.");
         }
 
-        // Initialize default rules
         _config = new FilterConfig
         {
-            Rules = new List<RuleDefinition>
+            LocalRules = new List<RuleDefinition>
             {
-                new() { Pattern = "youtube.com/shorts/*", Description = "YouTube Shorts 차단" },
-                new() { Pattern = "*.tiktok.com/*", Description = "틱톡 전면 차단" },
-                new() { Pattern = "instagram.com/reels/*", Description = "인스타그램 릴스 차단" },
-                new() { Pattern = "*chzzk.naver.com*", Description = "치지직 방송 차단" },
-                new() { Pattern = "reddit.com/r/all/*", Description = "레딧 All 차단" }
+                new() { Pattern = "youtube.com/shorts/*", Description = "YouTube Shorts 차단", Enabled = true },
+                new() { Pattern = "*.tiktok.com/*", Description = "틱톡 전면 차단", Enabled = true },
+                new() { Pattern = "instagram.com/reels/*", Description = "인스타그램 릴스 차단", Enabled = true },
+                new() { Pattern = "*chzzk.naver.com*", Description = "치지직 방송 차단", Enabled = true }
             }
         };
         SaveLocalConfig();
@@ -73,8 +100,42 @@ public class ConfigManager
         }
     }
 
+    public bool UpdatePassword(string oldPassword, string newPassword)
+    {
+        if (!string.Equals(_config.MasterPasswordHash, oldPassword, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        _config.MasterPasswordHash = newPassword;
+        SaveLocalConfig();
+        _logger.LogInformation("Master password updated successfully.");
+        return true;
+    }
+
+    public void UpdateRuleSettings(string mode, List<RuleDefinition> localRules, string? gitHubUrl)
+    {
+        _config.RuleMode = mode;
+        _config.LocalRules = localRules;
+        if (!string.IsNullOrWhiteSpace(gitHubUrl))
+        {
+            _config.GitHubRulesUrl = gitHubUrl.Trim();
+        }
+
+        SaveLocalConfig();
+        ConfigUpdated?.Invoke();
+        _logger.LogInformation("Rule settings updated. Mode: {Mode}, LocalRules: {Count}", mode, localRules.Count);
+    }
+
     public async Task SyncWithGitHubAsync(CancellationToken ct = default)
     {
+        // Local 모드일 때는 깃허브 원격 동기화 건너뜀
+        if (string.Equals(_config.RuleMode, "Local", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogDebug("Sync skipped because RuleMode is 'Local'.");
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(_config.GitHubRulesUrl))
             return;
 
@@ -88,7 +149,6 @@ public class ConfigManager
                 var remoteConfig = JsonSerializer.Deserialize<FilterConfig>(content, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (remoteConfig != null && remoteConfig.Rules.Count > 0)
                 {
-                    // Merge remote rules while retaining local port & password if not provided
                     _config.Rules = remoteConfig.Rules;
                     if (remoteConfig.BlockPage != null)
                     {
