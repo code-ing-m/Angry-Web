@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 
 namespace AngryWeb.Installer;
 
@@ -335,25 +336,67 @@ public partial class MainForm : Form
     {
         try
         {
-            var startMenuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), "Programs");
-            var shortcutPath = Path.Combine(startMenuDir, "Angry Web.lnk");
+            // 1. 공용 시작 메뉴 및 현재 사용자 시작 메뉴 폴더 모두 등록
+            var paths = new List<string>
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms)),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs))
+            };
 
-            // PowerShell WScript.Shell 스크립트로 Windows 검색에 표시될 .lnk 바로가기 생성
-            // 바로가기 실행 시 브라우저에서 대시보드 페이지가 바로 열립니다.
-            var psScript = $"""
-$WshShell = New-Object -ComObject WScript.Shell
-$Shortcut = $WshShell.CreateShortcut('{shortcutPath}')
-$Shortcut.TargetPath = 'cmd.exe'
-$Shortcut.Arguments = '/c start http://127.0.0.1:8898/dashboard'
-$Shortcut.Description = 'Angry Web 사이트 차단 및 관리 대시보드'
-$Shortcut.IconLocation = '{targetExe},0'
-$Shortcut.WindowStyle = 7
-$Shortcut.Save()
+            // HKEY_USERS의 활성 사용자 프로필 경로에도 복사
+            try
+            {
+                var userProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+                if (!string.IsNullOrEmpty(userProfile))
+                {
+                    var userStart = Path.Combine(userProfile, @"AppData\Roaming\Microsoft\Windows\Start Menu\Programs");
+                    if (!paths.Contains(userStart, StringComparer.OrdinalIgnoreCase))
+                        paths.Add(userStart);
+                }
+            }
+            catch { }
+
+            foreach (var dir in paths)
+            {
+                try
+                {
+                    if (!Directory.Exists(dir))
+                        Directory.CreateDirectory(dir);
+
+                    // .url 파일은 외부 스크립트나 COM 객체 없이 OS 네이티브 텍스트 포맷으로 100% 즉시 생성됨
+                    var urlPath = Path.Combine(dir, "Angry Web.url");
+                    var content = $"""
+[InternetShortcut]
+URL=http://127.0.0.1:8898/dashboard
+IconIndex=0
+IconFile={targetExe}
 """;
-            var tempPs = Path.Combine(Path.GetTempPath(), "create_angryweb_shortcut.ps1");
-            File.WriteAllText(tempPs, psScript);
-            RunCmd("powershell.exe", $"-ExecutionPolicy Bypass -NoProfile -File \"{tempPs}\"");
-            try { File.Delete(tempPs); } catch { }
+                    File.WriteAllText(urlPath, content, Encoding.ASCII);
+                }
+                catch { }
+            }
+
+            // WScript.Shell을 통한 .lnk 도 보조 생성 시도
+            try
+            {
+                var commonDir = Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms);
+                var lnkPath = Path.Combine(commonDir, "Angry Web.lnk");
+                var ps = $"""
+$w = New-Object -ComObject WScript.Shell
+$s = $w.CreateShortcut('{lnkPath}')
+$s.TargetPath = 'cmd.exe'
+$s.Arguments = '/c start http://127.0.0.1:8898/dashboard'
+$s.Description = 'Angry Web 대시보드'
+$s.IconLocation = '{targetExe},0'
+$s.WindowStyle = 7
+$s.Save()
+""";
+                var tempFile = Path.Combine(Path.GetTempPath(), "mklink.ps1");
+                File.WriteAllText(tempFile, ps);
+                RunCmd("powershell.exe", $"-ExecutionPolicy Bypass -NoProfile -File \"{tempFile}\"");
+                try { File.Delete(tempFile); } catch { }
+            }
+            catch { }
         }
         catch { }
     }
@@ -362,9 +405,18 @@ $Shortcut.Save()
     {
         try
         {
-            var startMenuDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), "Programs");
-            var shortcutPath = Path.Combine(startMenuDir, "Angry Web.lnk");
-            if (File.Exists(shortcutPath)) File.Delete(shortcutPath);
+            var dirs = new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
+                Environment.GetFolderPath(Environment.SpecialFolder.Programs)
+            };
+            foreach (var dir in dirs)
+            {
+                var f1 = Path.Combine(dir, "Angry Web.url");
+                var f2 = Path.Combine(dir, "Angry Web.lnk");
+                if (File.Exists(f1)) try { File.Delete(f1); } catch { }
+                if (File.Exists(f2)) try { File.Delete(f2); } catch { }
+            }
         }
         catch { }
     }
