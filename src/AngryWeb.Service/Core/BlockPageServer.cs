@@ -98,7 +98,7 @@ public class BlockPageServer
             {
                 using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
                 var body = await reader.ReadToEndAsync();
-                var data = JsonSerializer.Deserialize<UnlockRequest>(body);
+                var data = JsonSerializer.Deserialize<UnlockRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                 if (data != null && IsPasswordValid(data.Password))
                 {
@@ -175,7 +175,7 @@ public class BlockPageServer
 
                 using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
                 var body = await reader.ReadToEndAsync();
-                var data = JsonSerializer.Deserialize<ChangePasswordRequest>(body);
+                var data = JsonSerializer.Deserialize<ChangePasswordRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                 if (data == null || string.IsNullOrWhiteSpace(data.NewPassword))
                 {
