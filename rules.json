@@ -101,11 +101,6 @@
          "Enabled": true
       },
       {
-         "Pattern": "*.youtube.com/*",
-         "Description": "유튜브 영상 및 뮤직",
-         "Enabled": true
-      },
-      {
          "Pattern": "*.netflix.com/*",
          "Description": "넷플릭스",
          "Enabled": true
