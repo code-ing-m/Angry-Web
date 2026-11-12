@@ -26,11 +26,6 @@
          "Enabled": true
       },
       {
-         "Pattern": "youtube.com/ (++ watch ++ v=game) | gaming",
-         "Description": "유튜브 게임 관련 복합 조건 차단",
-         "Enabled": true
-      },
-      {
          "Pattern": "*.crazygames.com/*",
          "Description": "크레이지게임즈 (CrazyGames)",
          "Enabled": true
