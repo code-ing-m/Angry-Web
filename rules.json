@@ -6,7 +6,7 @@
    "SyncIntervalMinutes": 10,
    "Rules": [
       {
-         "Pattern": "youtube.com/shorts/*",
+         "Pattern": "*.youtube.com/shorts/*",
          "Description": "유튜브 쇼츠 차단",
          "Enabled": true
       },
@@ -16,7 +16,7 @@
          "Enabled": true
       },
       {
-         "Pattern": "instagram.com/reels/*",
+         "Pattern": "*.instagram.com/reels/*",
          "Description": "인스타그램 릴스 차단",
          "Enabled": true
       },
