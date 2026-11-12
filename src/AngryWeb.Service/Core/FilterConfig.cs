@@ -16,6 +16,11 @@ public class FilterConfig
     /// </summary>
     public string RuleMode { get; set; } = "Online";
 
+    /// <summary>
+    /// Angry Web 필터링 활성화 여부 (ON / OFF)
+    /// </summary>
+    public bool IsEnabled { get; set; } = true;
+
     // 깃허브에서 가져온 원격 룰 캐시
     public List<RuleDefinition> Rules { get; set; } = new();
 

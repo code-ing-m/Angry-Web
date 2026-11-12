@@ -29,6 +29,12 @@ public class ConfigManager
     /// </summary>
     public IEnumerable<RuleDefinition> GetActiveRules()
     {
+        // Angry Web 전체가 꺼져(OFF)있는 경우 어떠한 규칙도 활성화하지 않음
+        if (!_config.IsEnabled)
+        {
+            return Enumerable.Empty<RuleDefinition>();
+        }
+
         var mode = _config.RuleMode?.Trim() ?? "Online";
 
         if (string.Equals(mode, "Local", StringComparison.OrdinalIgnoreCase))
@@ -38,8 +44,47 @@ public class ConfigManager
 
         if (string.Equals(mode, "Hybrid", StringComparison.OrdinalIgnoreCase))
         {
-            return _config.Rules.Where(r => r.Enabled)
-                .Concat(_config.LocalRules.Where(r => r.Enabled));
+            // 하이브리드 모드:
+            // 로컬 규칙이 온라인 규칙보다 우선합니다.
+            // 1. 로컬에 동일 패턴의 규칙이 존재할 때:
+            //    - 로컬 룰이 false(비활성화)면 온라인에서 true여도 제재 X (차단 제외)
+            //    - 로컬 룰이 true면 차단 적용
+            // 2. 로컬에 없는 온라인 룰은 온라인의 Enabled 상태를 따름
+            var localDict = new Dictionary<string, RuleDefinition>(StringComparer.OrdinalIgnoreCase);
+            foreach (var lr in _config.LocalRules)
+            {
+                var norm = NormalizePattern(lr.Pattern);
+                if (!string.IsNullOrEmpty(norm))
+                {
+                    localDict[norm] = lr;
+                }
+            }
+
+            var result = new List<RuleDefinition>();
+
+            // 온라인 룰 처리: 로컬에서 명시적으로 정의된 패턴이 없을 때만 추가
+            foreach (var or in _config.Rules)
+            {
+                var norm = NormalizePattern(or.Pattern);
+                if (!localDict.ContainsKey(norm))
+                {
+                    if (or.Enabled)
+                    {
+                        result.Add(or);
+                    }
+                }
+            }
+
+            // 로컬 룰 중 활성화(Enabled == true)된 룰 추가
+            foreach (var lr in _config.LocalRules)
+            {
+                if (lr.Enabled && !string.IsNullOrWhiteSpace(lr.Pattern))
+                {
+                    result.Add(lr);
+                }
+            }
+
+            return result;
         }
 
         // Default: Online mode (or fallback to Local if Rules is empty)
@@ -49,6 +94,15 @@ public class ConfigManager
         }
 
         return _config.LocalRules.Where(r => r.Enabled);
+    }
+
+    private static string NormalizePattern(string? pattern)
+    {
+        if (string.IsNullOrWhiteSpace(pattern)) return string.Empty;
+        var p = pattern.Trim();
+        if (p.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) p = p.Substring(8);
+        else if (p.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) p = p.Substring(7);
+        return p.TrimEnd('/');
     }
 
     public void LoadLocalConfig()
@@ -122,10 +176,14 @@ public class ConfigManager
         return true;
     }
 
-    public void UpdateRuleSettings(string mode, List<RuleDefinition> localRules, string? gitHubUrl)
+    public void UpdateRuleSettings(string mode, List<RuleDefinition> localRules, string? gitHubUrl, bool? isEnabled = null)
     {
         _config.RuleMode = mode;
         _config.LocalRules = localRules;
+        if (isEnabled.HasValue)
+        {
+            _config.IsEnabled = isEnabled.Value;
+        }
         if (!string.IsNullOrWhiteSpace(gitHubUrl))
         {
             _config.GitHubRulesUrl = gitHubUrl.Trim();
@@ -133,7 +191,7 @@ public class ConfigManager
 
         SaveLocalConfig();
         ConfigUpdated?.Invoke();
-        _logger.LogInformation("Rule settings updated. Mode: {Mode}, LocalRules: {Count}", mode, localRules.Count);
+        _logger.LogInformation("Rule settings updated. Mode: {Mode}, IsEnabled: {Enabled}, LocalRules: {Count}", mode, _config.IsEnabled, localRules.Count);
     }
 
     public async Task SyncWithGitHubAsync(CancellationToken ct = default)
