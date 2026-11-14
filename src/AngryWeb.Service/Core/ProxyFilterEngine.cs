@@ -228,7 +228,15 @@ public class ProxyFilterEngine : IDisposable
             return Task.CompletedTask;
         }
 
+        // 1. 임시 해제 인증 여부 확인
         if (_accessManager.IsAllowed(hostname))
+        {
+            return Task.CompletedTask;
+        }
+
+        // 2. 인강 사이트에서 임베드되는 유튜브/미디어 도메인인지 확인
+        // 만약 인강 사이트가 화이트리스트에 등록되어 있다면, 유튜브 도메인의 CONNECT 터널링을 차단/복호화하지 않고 통과시켜야 재생됩니다.
+        if (IsMediaStreamingHost(hostname) && HasActiveEmbedWhitelist())
         {
             return Task.CompletedTask;
         }
@@ -244,6 +252,22 @@ public class ProxyFilterEngine : IDisposable
         }
 
         return Task.CompletedTask;
+    }
+
+    private static bool IsMediaStreamingHost(string host)
+    {
+        var h = host.ToLowerInvariant();
+        return h.Contains("googlevideo.com") ||
+               h.Contains("ytimg.com") ||
+               h.Contains("youtube-nocookie.com") ||
+               h.Contains("youtube.com") ||
+               h.Contains("youtu.be");
+    }
+
+    private bool HasActiveEmbedWhitelist()
+    {
+        var list = _configManager.CurrentConfig.AllowedEmbedParents;
+        return list != null && list.Count > 0;
     }
 
     private async Task OnBeforeRequest(object sender, SessionEventArgs e)
@@ -314,6 +338,14 @@ public class ProxyFilterEngine : IDisposable
     {
         var referer = e.HttpClient.Request.Headers.FirstOrDefault(h => h.Name.Equals("Referer", StringComparison.OrdinalIgnoreCase))?.Value;
         var origin = e.HttpClient.Request.Headers.FirstOrDefault(h => h.Name.Equals("Origin", StringComparison.OrdinalIgnoreCase))?.Value;
+        var fullUrl = e.HttpClient.Request.Url;
+
+        // 1. googlevideo 스트리밍 청크는 referer가 비어있을 수 있으므로 유튜브 재생 도메인은 허용
+        var host = e.HttpClient.Request.RequestUri.Host.ToLowerInvariant();
+        if (host.Contains("googlevideo.com") || host.Contains("ytimg.com"))
+        {
+            return true;
+        }
 
         var allowedParents = _configManager.CurrentConfig.AllowedEmbedParents ?? new List<string>();
         if (allowedParents.Count == 0) return false;
