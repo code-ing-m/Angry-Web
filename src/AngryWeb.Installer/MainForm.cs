@@ -203,29 +203,39 @@ public partial class MainForm : Form
 
                 // 4. config.json 설정 저장 (임베디드된 최신 rules.json 기반)
                 var configPath = Path.Combine(_dataDir, "config.json");
+                var hashedPw = HashPassword(pw);
                 try
                 {
                     ExtractResource("AngryWeb.Installer.Resources.rules.json", configPath);
                     var rawJson = File.ReadAllText(configPath);
-                    // 비밀번호만 인스톨러에서 지정한 암호로 치환
-                    var updatedJson = System.Text.RegularExpressions.Regex.Replace(rawJson, "\"MasterPasswordHash\":\\s*\"(.*?)\"", $"\"MasterPasswordHash\": \"{pw}\"");
+                    // 비밀번호를 SHA-256 해시값으로 안전하게 치환
+                    var updatedJson = System.Text.RegularExpressions.Regex.Replace(rawJson, "\"MasterPasswordHash\":\\s*\"(.*?)\"", $"\"MasterPasswordHash\": \"{hashedPw}\"");
                     File.WriteAllText(configPath, updatedJson);
                 }
                 catch
                 {
                     // Fallback
-                    File.WriteAllText(configPath, $$"""{"MasterPasswordHash":"{{pw}}","GitHubRulesUrl":"https://raw.githubusercontent.com/code-ing-m/Angry-Web/main/rules.json","ProxyPort":8899,"BlockPagePort":8898,"SyncIntervalMinutes":10}""");
+                    File.WriteAllText(configPath, $$"""{"MasterPasswordHash":"{{hashedPw}}","GitHubRulesUrl":"https://raw.githubusercontent.com/code-ing-m/Angry-Web/main/rules.json","ProxyPort":8899,"BlockPagePort":8898,"SyncIntervalMinutes":10}""");
                 }
+
+                // 4-1. 디렉토리 보안 잠금 (일반 사용자의 임의 폴더 삭제/변조 차단)
+                ApplyDirectoryHardening(_installDir);
+                ApplyDirectoryHardening(_dataDir);
 
                 // 5. Windows 서비스 등록
                 Invoke(() => { _progressBar.Value = 70; _lblStatus.Text = "Windows 서비스 등록 중..."; });
                 RunCmd("sc.exe", $"create {ServiceName} binPath= \"{targetExe}\" start= auto DisplayName= \"Angry Web Filter Service\"");
                 RunCmd("sc.exe", $"description {ServiceName} \"웹 사이트 차단 및 집중 유지를 위한 Angry Web 보안 필터링 서비스\"");
-                RunCmd("sc.exe", $"failure {ServiceName} reset= 0 actions= restart/60000/restart/60000/restart/60000");
+                // 실패 시 0초만에 즉각 재시작 (강제 종료 방어)
+                RunCmd("sc.exe", $"failure {ServiceName} reset= 0 actions= restart/1000/restart/1000/restart/1000");
 
                 // 6. 서비스 시작
                 Invoke(() => { _progressBar.Value = 85; _lblStatus.Text = "서비스 시작 중..."; });
                 RunCmd("sc.exe", $"start {ServiceName}");
+
+                // 6-1. 일반 사용자의 서비스 임의 중지(sc stop / net stop) 권한 차단 (Service DACL 적용)
+                // SYSTEM(SY) 및 Administrators(BA)에게만 중지/제어 권한 부여
+                RunCmd("sc.exe", $"sdset {ServiceName} \"D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)\"");
 
                 // 7. 시작 메뉴 바로가기 생성 (Windows 검색에서 Angry Web 앱으로 검색되도록 등록)
                 Invoke(() => { _progressBar.Value = 95; _lblStatus.Text = "시작 메뉴 바로가기 등록 중..."; });
@@ -271,7 +281,7 @@ public partial class MainForm : Form
             catch { }
         }
 
-        if (inputPw != expectedPw)
+        if (!VerifyPassword(expectedPw, inputPw))
         {
             MessageBox.Show("제거를 방지하기 위한 마스터 비밀번호가 올바르지 않습니다.", "인증 실패", MessageBoxButtons.OK, MessageBoxIcon.Stop);
             return;
@@ -289,6 +299,10 @@ public partial class MainForm : Form
         {
             try
             {
+                // 제거 전 디렉토리 잠금 해제
+                RemoveDirectoryHardening(_installDir);
+                RemoveDirectoryHardening(_dataDir);
+
                 RunCmd("sc.exe", $"stop {ServiceName}");
                 RunCmd("sc.exe", $"delete {ServiceName}");
                 RemoveStartMenuShortcut();
@@ -424,6 +438,60 @@ $s.Save()
                 if (File.Exists(f1)) try { File.Delete(f1); } catch { }
                 if (File.Exists(f2)) try { File.Delete(f2); } catch { }
             }
+        }
+        catch { }
+    }
+
+    private static string HashPassword(string plainPassword)
+    {
+        if (string.IsNullOrEmpty(plainPassword)) return string.Empty;
+        var salted = "ANGRY_WEB_SALT_" + plainPassword;
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(salted));
+        return "sha256:" + Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static bool VerifyPassword(string storedHashOrPlain, string inputPassword)
+    {
+        if (string.IsNullOrEmpty(storedHashOrPlain)) return false;
+        if (storedHashOrPlain.StartsWith("sha256:"))
+        {
+            var hashedInput = HashPassword(inputPassword);
+            return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(storedHashOrPlain),
+                Encoding.UTF8.GetBytes(hashedInput)
+            );
+        }
+        return string.Equals(storedHashOrPlain, inputPassword, StringComparison.Ordinal);
+    }
+
+    private static void ApplyDirectoryHardening(string path)
+    {
+        try
+        {
+            if (!Directory.Exists(path)) return;
+
+            // icacls 명령어로 SYSTEM 및 Administrators에게 모든 권한을 주고,
+            // Users 및 Everyone에게는 삭제(D) 및 권한 변경 권한을 차단
+            // 1. 소유권을 Administrators로 설정
+            RunCmd("takeown.exe", $"/F \"{path}\" /A /R /D Y");
+            // 2. 상속 재설정 및 Administrators/SYSTEM Full Control
+            RunCmd("icacls.exe", $"\"{path}\" /reset /T /C");
+            RunCmd("icacls.exe", $"\"{path}\" /grant:r \"*S-1-5-18\":(OI)(CI)F /grant:r \"*S-1-5-32-544\":(OI)(CI)F /T /C");
+            // 3. 일반 사용자(Users: S-1-5-32-545)에게 읽기/실행만 부여하고 삭제(D, DE) 및 쓰기(WD, AD) 박탈
+            RunCmd("icacls.exe", $"\"{path}\" /grant \"*S-1-5-32-545\":(OI)(CI)RX /deny \"*S-1-5-32-545\":(DE,DC) /T /C");
+        }
+        catch { }
+    }
+
+    private static void RemoveDirectoryHardening(string path)
+    {
+        try
+        {
+            if (!Directory.Exists(path)) return;
+            RunCmd("takeown.exe", $"/F \"{path}\" /A /R /D Y");
+            RunCmd("icacls.exe", $"\"{path}\" /reset /T /C");
+            RunCmd("icacls.exe", $"\"{path}\" /grant \"*S-1-5-32-544\":(OI)(CI)F /grant \"*S-1-5-32-545\":(OI)(CI)F /T /C");
         }
         catch { }
     }

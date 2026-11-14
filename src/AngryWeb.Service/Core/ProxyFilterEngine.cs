@@ -15,6 +15,7 @@ public class ProxyFilterEngine : IDisposable
     private readonly TemporaryAccessManager _accessManager;
     private readonly ProxyServer _proxyServer;
     private ExplicitProxyEndPoint? _explicitEndPoint;
+    private CancellationTokenSource? _watchdogCts;
 
     [DllImport("wininet.dll", SetLastError = true, CharSet = CharSet.Auto)]
     private static extern bool InternetSetOption(IntPtr hInternet, int dwOption, IntPtr lpBuffer, int dwBufferLength);
@@ -78,12 +79,16 @@ public class ProxyFilterEngine : IDisposable
 
         // 2. Windows registry enforcement (HKCU and all logged-in user profiles via HKU)
         ApplyWindowsProxyRegistry(true, $"127.0.0.1:{config.ProxyPort}");
+
+        // 3. 실시간 프록시 레지스트리 감시 및 강제 유지 Watchdog 시작
+        StartProxyWatchdog();
     }
 
     public void Stop()
     {
         try
         {
+            _watchdogCts?.Cancel();
             ApplyWindowsProxyRegistry(false, null);
 
             if (_explicitEndPoint != null)
@@ -97,6 +102,44 @@ public class ProxyFilterEngine : IDisposable
         {
             _logger.LogError(ex, "Error while stopping proxy server.");
         }
+    }
+
+    private void StartProxyWatchdog()
+    {
+        _watchdogCts = new CancellationTokenSource();
+        var ct = _watchdogCts.Token;
+
+        Task.Run(async () =>
+        {
+            _logger.LogInformation("Proxy settings watchdog started.");
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(2000, ct);
+
+                    var cfg = _configManager.CurrentConfig;
+                    // Angry Web이 전체 활성화(IsEnabled == true)되어 있을 때만 프록시 강제 유지
+                    if (cfg.IsEnabled)
+                    {
+                        var proxyAddr = $"127.0.0.1:{cfg.ProxyPort}";
+                        ApplyWindowsProxyRegistry(true, proxyAddr);
+                    }
+                    else
+                    {
+                        ApplyWindowsProxyRegistry(false, null);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Watchdog tick error");
+                }
+            }
+        }, ct);
     }
 
     private static void NotifyWinInet()
