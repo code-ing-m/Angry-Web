@@ -118,6 +118,17 @@ public class ConfigManager
                     _config = loaded;
                     _config.LocalRules ??= new List<RuleDefinition>();
                     _config.Rules ??= new List<RuleDefinition>();
+                    _config.AllowedEmbedParents ??= new List<string>
+                    {
+                        "ebsi.co.kr", "ebs.co.kr", "megastudy.net", "etoos.com", "mimacstudy.com", "daesungmimac.com", "emath.co.kr"
+                    };
+
+                    // 비상 복구 키가 없으면 기본 비상 키 생성
+                    if (string.IsNullOrEmpty(_config.RecoveryKeyHash))
+                    {
+                        _config.RecoveryKeyHash = PasswordHelper.HashPassword("ANGRY-SAFE-2026-KEY");
+                        SaveLocalConfig();
+                    }
 
                     // 구버전 평문 비밀번호가 저장되어 있다면 자동으로 SHA-256 솔트 해시로 변환하여 파일 저장
                     if (!string.IsNullOrEmpty(_config.MasterPasswordHash) && !_config.MasterPasswordHash.StartsWith("sha256:"))
@@ -176,13 +187,35 @@ public class ConfigManager
         return true;
     }
 
-    public void UpdateRuleSettings(string mode, List<RuleDefinition> localRules, string? gitHubUrl, bool? isEnabled = null)
+    public bool ResetPasswordWithRecoveryKey(string recoveryKey, string newPassword)
+    {
+        if (string.IsNullOrWhiteSpace(recoveryKey) || string.IsNullOrWhiteSpace(_config.RecoveryKeyHash))
+        {
+            return false;
+        }
+
+        if (!PasswordHelper.VerifyPassword(_config.RecoveryKeyHash, recoveryKey.Trim()))
+        {
+            return false;
+        }
+
+        _config.MasterPasswordHash = PasswordHelper.HashPassword(newPassword.Trim());
+        SaveLocalConfig();
+        _logger.LogInformation("Password reset successfully using recovery key.");
+        return true;
+    }
+
+    public void UpdateRuleSettings(string mode, List<RuleDefinition> localRules, string? gitHubUrl, bool? isEnabled = null, List<string>? allowedEmbedParents = null)
     {
         _config.RuleMode = mode;
         _config.LocalRules = localRules;
         if (isEnabled.HasValue)
         {
             _config.IsEnabled = isEnabled.Value;
+        }
+        if (allowedEmbedParents != null)
+        {
+            _config.AllowedEmbedParents = allowedEmbedParents;
         }
         if (!string.IsNullOrWhiteSpace(gitHubUrl))
         {

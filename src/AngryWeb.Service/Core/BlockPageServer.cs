@@ -16,6 +16,11 @@ public class BlockPageServer
     // 대시보드 로그인 세션 토큰 관리 (1시간 유효)
     private readonly ConcurrentDictionary<string, DateTime> _dashboardSessions = new();
 
+    // 비밀번호 시도 횟수 제한 (5회 오류 시 10분 잠금)
+    private int _failedAttempts = 0;
+    private DateTime _lockoutUntil = DateTime.MinValue;
+    private readonly object _lockoutSync = new();
+
     public BlockPageServer(ILogger<BlockPageServer> logger, ConfigManager configManager, TemporaryAccessManager accessManager)
     {
         _logger = logger;
@@ -96,12 +101,21 @@ public class BlockPageServer
             // 1. 임시 해제 API
             if (req.HttpMethod == "POST" && path == "/api/unlock")
             {
+                var lockout = CheckLockout();
+                if (!lockout.Allowed)
+                {
+                    res.StatusCode = 429;
+                    await WriteResponse(res, JsonSerializer.Serialize(new { success = false, message = lockout.LockoutMessage }), "application/json");
+                    return;
+                }
+
                 using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
                 var body = await reader.ReadToEndAsync();
                 var data = JsonSerializer.Deserialize<UnlockRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                 if (data != null && IsPasswordValid(data.Password))
                 {
+                    RecordPasswordAttempt(true);
                     var minutes = data.Minutes > 0 && data.Minutes <= 120 ? data.Minutes : 15;
                     _accessManager.Allow(data.TargetUrl, TimeSpan.FromMinutes(minutes));
                     _logger.LogInformation("Temporarily allowed {Target} for {Mins} mins", data.TargetUrl, minutes);
@@ -111,8 +125,12 @@ public class BlockPageServer
                     return;
                 }
 
+                RecordPasswordAttempt(false);
+                var postLock = CheckLockout();
+                var failMsg = !postLock.Allowed ? postLock.LockoutMessage : "비밀번호가 올바르지 않습니다.";
+
                 res.StatusCode = 401;
-                var failJson = JsonSerializer.Serialize(new { success = false, message = "비밀번호가 올바르지 않습니다." });
+                var failJson = JsonSerializer.Serialize(new { success = false, message = failMsg });
                 await WriteResponse(res, failJson, "application/json");
                 return;
             }
@@ -120,12 +138,21 @@ public class BlockPageServer
             // 2. 대시보드 로그인 API
             if (req.HttpMethod == "POST" && path == "/api/dashboard/login")
             {
+                var lockout = CheckLockout();
+                if (!lockout.Allowed)
+                {
+                    res.StatusCode = 429;
+                    await WriteResponse(res, JsonSerializer.Serialize(new { success = false, message = lockout.LockoutMessage }), "application/json");
+                    return;
+                }
+
                 using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
                 var body = await reader.ReadToEndAsync();
                 var data = JsonSerializer.Deserialize<LoginRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                 if (data != null && IsPasswordValid(data.Password))
                 {
+                    RecordPasswordAttempt(true);
                     var token = Guid.NewGuid().ToString("N");
                     _dashboardSessions[token] = DateTime.UtcNow.AddHours(2);
                     var loginSuccess = JsonSerializer.Serialize(new { success = true, token });
@@ -133,9 +160,39 @@ public class BlockPageServer
                     return;
                 }
 
+                RecordPasswordAttempt(false);
+                var postLock = CheckLockout();
+                var failMsg = !postLock.Allowed ? postLock.LockoutMessage : "마스터 비밀번호가 올바르지 않습니다.";
+
                 res.StatusCode = 401;
-                var loginFail = JsonSerializer.Serialize(new { success = false, message = "마스터 비밀번호가 올바르지 않습니다." });
+                var loginFail = JsonSerializer.Serialize(new { success = false, message = failMsg });
                 await WriteResponse(res, loginFail, "application/json");
+                return;
+            }
+
+            // 2-1. 비상 복구 키로 비밀번호 재설정 API
+            if (req.HttpMethod == "POST" && path == "/api/dashboard/reset-password")
+            {
+                using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
+                var body = await reader.ReadToEndAsync();
+                var data = JsonSerializer.Deserialize<ResetPasswordRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                if (data == null || string.IsNullOrWhiteSpace(data.RecoveryKey) || string.IsNullOrWhiteSpace(data.NewPassword))
+                {
+                    res.StatusCode = 400;
+                    await WriteResponse(res, JsonSerializer.Serialize(new { success = false, message = "비상 키와 새 비밀번호를 모두 입력해주세요." }), "application/json");
+                    return;
+                }
+
+                if (_configManager.ResetPasswordWithRecoveryKey(data.RecoveryKey, data.NewPassword))
+                {
+                    RecordPasswordAttempt(true); // 잠금 해제
+                    await WriteResponse(res, JsonSerializer.Serialize(new { success = true, message = "비밀번호가 성공적으로 재설정되었습니다! 새 비밀번호로 로그인해주세요." }), "application/json");
+                    return;
+                }
+
+                res.StatusCode = 401;
+                await WriteResponse(res, JsonSerializer.Serialize(new { success = false, message = "비상 복구 키가 올바르지 않습니다." }), "application/json");
                 return;
             }
 
@@ -156,6 +213,7 @@ public class BlockPageServer
                     ruleMode = cfg.RuleMode ?? "Online",
                     gitHubRulesUrl = cfg.GitHubRulesUrl,
                     localRules = cfg.LocalRules ?? new List<RuleDefinition>(),
+                    allowedEmbedParents = cfg.AllowedEmbedParents ?? new List<string>(),
                     onlineRulesCount = cfg.Rules?.Count ?? 0,
                     activeRulesCount = _configManager.GetActiveRules().Count()
                 };
@@ -214,7 +272,7 @@ public class BlockPageServer
                 {
                     var mode = data.RuleMode ?? "Online";
                     var localRules = data.LocalRules ?? new List<RuleDefinition>();
-                    _configManager.UpdateRuleSettings(mode, localRules, data.GitHubRulesUrl, data.IsEnabled);
+                    _configManager.UpdateRuleSettings(mode, localRules, data.GitHubRulesUrl, data.IsEnabled, data.AllowedEmbedParents);
 
                     await WriteResponse(res, JsonSerializer.Serialize(new { success = true, message = "설정이 즉시 적용되었습니다." }), "application/json");
                     return;
@@ -259,6 +317,41 @@ public class BlockPageServer
             _logger.LogError(ex, "Error handling request: {Path}", path);
             res.StatusCode = 500;
             res.Close();
+        }
+    }
+
+    private (bool Allowed, string? LockoutMessage) CheckLockout()
+    {
+        lock (_lockoutSync)
+        {
+            if (DateTime.UtcNow < _lockoutUntil)
+            {
+                var remaining = _lockoutUntil - DateTime.UtcNow;
+                var mins = Math.Ceiling(remaining.TotalMinutes);
+                return (false, $"비밀번호를 5회 연속 틀려 보안 잠금되었습니다. {mins}분 후에 다시 시도해주세요.");
+            }
+            return (true, null);
+        }
+    }
+
+    private void RecordPasswordAttempt(bool success)
+    {
+        lock (_lockoutSync)
+        {
+            if (success)
+            {
+                _failedAttempts = 0;
+                _lockoutUntil = DateTime.MinValue;
+            }
+            else
+            {
+                _failedAttempts++;
+                if (_failedAttempts >= 5)
+                {
+                    _lockoutUntil = DateTime.UtcNow.AddMinutes(10);
+                    _logger.LogWarning("Security Lockout triggered: 5 consecutive failed attempts. Locked for 10 minutes.");
+                }
+            }
         }
     }
 
@@ -1142,6 +1235,24 @@ public class BlockPageServer
             <input type="password" id="authPassword" placeholder="마스터 비밀번호 입력" onkeypress="if(event.key==='Enter') doLogin();">
             <button class="btn-primary" style="height: 48px;" onclick="doLogin()">대시보드 접속</button>
             <div id="authMsg" style="font-size: 13px; color: var(--live-red); min-height: 18px; font-weight: 700;"></div>
+            <div style="margin-top: 8px;">
+                <a href="javascript:void(0)" onclick="toggleResetBox(true)" style="font-size: 12px; color: var(--text-secondary); text-decoration: underline;">비밀번호를 잊으셨나요? (비상 복구)</a>
+            </div>
+        </div>
+
+        <!-- 비상 복구 키로 재설정 창 -->
+        <div id="resetBox" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--border); text-align: left;">
+            <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">🔑 비상 복구 키로 재설정</h4>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">설치 시 발급받은 비상 키를 입력하세요.</p>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <input type="text" id="recoveryKeyInput" placeholder="비상 복구 키 (예: ANGRY-...)">
+                <input type="password" id="resetNewPw" placeholder="새 마스터 비밀번호">
+                <button class="btn-secondary" onclick="doResetPassword()">비밀번호 재설정 실행</button>
+                <div id="resetMsg" style="font-size: 12px; min-height: 16px;"></div>
+                <div style="text-align: center;">
+                    <a href="javascript:void(0)" onclick="toggleResetBox(false)" style="font-size: 12px; color: var(--text-tertiary);">← 로그인으로 돌아가기</a>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1240,6 +1351,25 @@ public class BlockPageServer
                         </tbody>
                     </table>
                 </div>
+
+                <!-- 3. 인강 사이트 임베드 예외 허용 (화이트리스트) -->
+                <div class="section">
+                    <div class="section-header">
+                        <div class="section-title">
+                            <span>🎓 인강 사이트 임베드 동영상 허용 (화이트리스트)</span>
+                        </div>
+                    </div>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5;">
+                        인강 사이트 내부에서 재생되는 유튜브 영상(임베드)이 차단되지 않도록 인강 도메인을 등록합니다.
+                    </p>
+                    <div class="add-rule-form" style="grid-template-columns: 1fr 100px;">
+                        <input type="text" id="newEmbedParent" placeholder="인강 도메인 (예: ebsi.co.kr, megastudy.net)">
+                        <button class="btn-primary" onclick="addEmbedParent()">+ 추가</button>
+                    </div>
+                    <div id="embedParentList" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+                        <!-- Dynamic Tags -->
+                    </div>
+                </div>
             </div>
 
             <!-- 우측 사이드바: 마스터 비밀번호 관리 + 시스템 상태 -->
@@ -1277,6 +1407,7 @@ public class BlockPageServer
         let currentConfig = null;
         let selectedMode = 'Online';
         let localRules = [];
+        let allowedEmbedParents = [];
         let isEnabled = true;
 
         window.onload = () => {
@@ -1286,6 +1417,46 @@ public class BlockPageServer
                 showAuth();
             }
         };
+
+        function toggleResetBox(show) {
+            document.getElementById('resetBox').style.display = show ? 'block' : 'none';
+            document.getElementById('resetMsg').innerText = '';
+        }
+
+        async function doResetPassword() {
+            const key = document.getElementById('recoveryKeyInput').value.trim();
+            const newPw = document.getElementById('resetNewPw').value.trim();
+            const msg = document.getElementById('resetMsg');
+
+            if (!key || !newPw) {
+                msg.style.color = 'var(--live-red)';
+                msg.innerText = '비상 키와 새 비밀번호를 모두 입력하세요.';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/dashboard/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recoveryKey: key, newPassword: newPw })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    msg.style.color = 'var(--naver-green)';
+                    msg.innerText = data.message;
+                    setTimeout(() => {
+                        toggleResetBox(false);
+                        document.getElementById('authPassword').value = newPw;
+                    }, 1500);
+                } else {
+                    msg.style.color = 'var(--live-red)';
+                    msg.innerText = data.message || '재설정 실패';
+                }
+            } catch (err) {
+                msg.style.color = 'var(--live-red)';
+                msg.innerText = '서버 통신 오류';
+            }
+        }
 
         function showAuth() {
             document.getElementById('authBox').style.display = 'block';
@@ -1340,11 +1511,13 @@ public class BlockPageServer
                 currentConfig = data;
                 selectedMode = data.ruleMode || 'Online';
                 localRules = data.localRules || [];
+                allowedEmbedParents = data.allowedEmbedParents || [];
                 isEnabled = data.isEnabled !== false;
 
                 updatePowerUi(isEnabled);
                 setMode(selectedMode, false);
                 renderRulesTable();
+                renderEmbedParents();
                 updateStats(data);
                 showDash();
             } catch (err) {
@@ -1436,6 +1609,39 @@ public class BlockPageServer
             }
         }
 
+        function renderEmbedParents() {
+            const container = document.getElementById('embedParentList');
+            container.innerHTML = '';
+            if (allowedEmbedParents.length === 0) {
+                container.innerHTML = '<span style="font-size: 12px; color: var(--text-tertiary);">등록된 허용 도메인이 없습니다.</span>';
+                return;
+            }
+            allowedEmbedParents.forEach((domain, idx) => {
+                const tag = document.createElement('span');
+                tag.style = 'background: var(--surface-muted); border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;';
+                tag.innerHTML = `<strong>${escapeHtml(domain)}</strong> <span style="cursor: pointer; color: var(--live-red); font-weight: bold;" onclick="deleteEmbedParent(${idx})">×</span>`;
+                container.appendChild(tag);
+            });
+        }
+
+        function addEmbedParent() {
+            const val = document.getElementById('newEmbedParent').value.trim().toLowerCase();
+            if (!val) {
+                alert('인강 도메인을 입력해주세요.');
+                return;
+            }
+            if (!allowedEmbedParents.includes(val)) {
+                allowedEmbedParents.push(val);
+                document.getElementById('newEmbedParent').value = '';
+                renderEmbedParents();
+            }
+        }
+
+        function deleteEmbedParent(idx) {
+            allowedEmbedParents.splice(idx, 1);
+            renderEmbedParents();
+        }
+
         async function saveAllSettings() {
             try {
                 const res = await fetch('/api/dashboard/save-rules', {
@@ -1447,7 +1653,8 @@ public class BlockPageServer
                     body: JSON.stringify({
                         isEnabled: isEnabled,
                         ruleMode: selectedMode,
-                        localRules: localRules
+                        localRules: localRules,
+                        allowedEmbedParents: allowedEmbedParents
                     })
                 });
                 const data = await res.json();
@@ -1554,6 +1761,13 @@ public class BlockPageServer
         public bool? IsEnabled { get; set; }
         public string? RuleMode { get; set; }
         public List<RuleDefinition>? LocalRules { get; set; }
+        public List<string>? AllowedEmbedParents { get; set; }
         public string? GitHubRulesUrl { get; set; }
+    }
+
+    private class ResetPasswordRequest
+    {
+        public string? RecoveryKey { get; set; }
+        public string? NewPassword { get; set; }
     }
 }

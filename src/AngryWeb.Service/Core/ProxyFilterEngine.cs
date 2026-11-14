@@ -261,6 +261,13 @@ public class ProxyFilterEngine : IDisposable
             return;
         }
 
+        // 인강 등 허용된 상위 사이트(Referer/Origin)에서 임베드된 요청인지 확인 (인강 유튜브 플레이어 허용)
+        if (IsAllowedEmbedRequest(e))
+        {
+            _logger.LogInformation("[EMBED ALLOWED] Allowed media request for {Url} from parent site", fullUrl);
+            return;
+        }
+
         // Check against PatternMatcher
         if (_patternMatcher.IsBlocked(fullUrl, out var matchedRule))
         {
@@ -287,6 +294,32 @@ public class ProxyFilterEngine : IDisposable
                     { "Content-Type", new HttpHeader("Content-Type", "text/html; charset=utf-8") }
                 });
         }
+    }
+
+    private bool IsAllowedEmbedRequest(SessionEventArgs e)
+    {
+        var referer = e.HttpClient.Request.Headers.FirstOrDefault(h => h.Name.Equals("Referer", StringComparison.OrdinalIgnoreCase))?.Value;
+        var origin = e.HttpClient.Request.Headers.FirstOrDefault(h => h.Name.Equals("Origin", StringComparison.OrdinalIgnoreCase))?.Value;
+
+        var allowedParents = _configManager.CurrentConfig.AllowedEmbedParents ?? new List<string>();
+        if (allowedParents.Count == 0) return false;
+
+        foreach (var parent in allowedParents)
+        {
+            if (string.IsNullOrWhiteSpace(parent)) continue;
+            var cleanParent = parent.Trim().ToLowerInvariant();
+
+            if (!string.IsNullOrEmpty(referer) && referer.ToLowerInvariant().Contains(cleanParent))
+            {
+                return true;
+            }
+            if (!string.IsNullOrEmpty(origin) && origin.ToLowerInvariant().Contains(cleanParent))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private Task OnBeforeResponse(object sender, SessionEventArgs e)

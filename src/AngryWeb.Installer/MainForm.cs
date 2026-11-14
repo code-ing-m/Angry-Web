@@ -144,6 +144,21 @@ public partial class MainForm : Form
         _btnUninstall.FlatAppearance.BorderSize = 0;
         _btnUninstall.Click += BtnUninstall_Click;
         Controls.Add(_btnUninstall);
+
+        var btnResetPw = new Button
+        {
+            Text = "비밀번호 초기화",
+            Location = new Point(25, 290),
+            Size = new Size(130, 40),
+            BackColor = Color.FromArgb(9, 105, 218),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Cursor = Cursors.Hand
+        };
+        btnResetPw.FlatAppearance.BorderSize = 0;
+        btnResetPw.Click += BtnResetPw_Click;
+        Controls.Add(btnResetPw);
     }
 
     private void CheckCurrentStatus()
@@ -325,6 +340,50 @@ public partial class MainForm : Form
                 Invoke(() => SetUiEnabled(true));
             }
         });
+    }
+
+    private void BtnResetPw_Click(object? sender, EventArgs e)
+    {
+        var newPw = _txtPassword.Text.Trim();
+        if (string.IsNullOrEmpty(newPw))
+        {
+            MessageBox.Show("재설정할 새 마스터 비밀번호를 위 입력창에 입력해주세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (MessageBox.Show("Windows 관리자 권한으로 마스터 비밀번호를 초기화하시겠습니까?", "비밀번호 초기화", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        var configPath = Path.Combine(_dataDir, "config.json");
+        try
+        {
+            // 잠시 권한 열기
+            RemoveDirectoryHardening(_dataDir);
+
+            if (File.Exists(configPath))
+            {
+                var text = File.ReadAllText(configPath);
+                var hashed = HashPassword(newPw);
+                var updated = System.Text.RegularExpressions.Regex.Replace(text, "\"MasterPasswordHash\":\\s*\"(.*?)\"", $"\"MasterPasswordHash\": \"{hashed}\"");
+                File.WriteAllText(configPath, updated);
+            }
+
+            // 다시 보안 잠금
+            ApplyDirectoryHardening(_dataDir);
+
+            // 서비스 재시작하여 메모리 반영
+            RunCmd("sc.exe", $"stop {ServiceName}");
+            Thread.Sleep(1000);
+            RunCmd("sc.exe", $"start {ServiceName}");
+
+            MessageBox.Show("마스터 비밀번호가 성공적으로 초기화되었습니다! 새 비밀번호로 대시보드에 로그인하세요.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"비밀번호 초기화 실패: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void SetUiEnabled(bool enabled)

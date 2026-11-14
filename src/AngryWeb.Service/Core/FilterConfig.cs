@@ -3,6 +3,7 @@ namespace AngryWeb.Service.Core;
 public class FilterConfig
 {
     public string MasterPasswordHash { get; set; } = "angryweb"; // Plain or hashed password
+    public string? RecoveryKeyHash { get; set; } // Hashed emergency recovery key
     public string GitHubRulesUrl { get; set; } = "https://raw.githubusercontent.com/code-ing-m/Angry-Web/main/rules.json";
     public int ProxyPort { get; set; } = 8899;
     public int BlockPagePort { get; set; } = 8898;
@@ -20,6 +21,18 @@ public class FilterConfig
     /// Angry Web 필터링 활성화 여부 (ON / OFF)
     /// </summary>
     public bool IsEnabled { get; set; } = true;
+
+    // 인강 사이트 등 특정 부모 사이트에서 요청하는 임베드/미디어 예외 허용 도메인 목록
+    public List<string> AllowedEmbedParents { get; set; } = new()
+    {
+        "ebsi.co.kr",
+        "ebs.co.kr",
+        "megastudy.net",
+        "etoos.com",
+        "mimacstudy.com",
+        "daesungmimac.com",
+        "emath.co.kr"
+    };
 
     // 깃허브에서 가져온 원격 룰 캐시
     public List<RuleDefinition> Rules { get; set; } = new();
