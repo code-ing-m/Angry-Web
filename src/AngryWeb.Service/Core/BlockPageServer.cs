@@ -216,6 +216,7 @@ public class BlockPageServer
                     gitHubRulesUrl = cfg.GitHubRulesUrl,
                     syncIntervalMinutes = cfg.SyncIntervalMinutes,
                     localRules = cfg.LocalRules ?? new List<RuleDefinition>(),
+                    onlineRules = cfg.Rules ?? new List<RuleDefinition>(),
                     allowedEmbedParents = cfg.AllowedEmbedParents ?? new List<string>(),
                     onlineRulesCount = cfg.Rules?.Count ?? 0,
                     activeRulesCount = _configManager.GetActiveRules().Count()
@@ -812,472 +813,1299 @@ public class BlockPageServer
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Angry Web - 제어 대시보드</title>
+    <title>Angry Web 관리자 대시보드</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=NanumSquare+Neo:wght@400;700;800&family=Pretendard:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --surface: #FFFFFF;
-            --surface-muted: #F5F6F8;
-            --border: #E4E8EB;
-            --text-primary: #1E1E23;
-            --text-secondary: #5F6368;
-            --text-tertiary: #8E949A;
             --naver-green: #03C75A;
             --naver-green-pressed: #02A94D;
             --naver-green-tint: #E6F8EE;
-            --live-red: #F04438;
+            --surface: #FFFFFF;
+            --surface-muted: #F5F6F8;
+            --border: #E4E8EB;
+            --border-strong: #C9CED3;
+            --text-primary: #1E1E23;
+            --text-secondary: #5F6368;
+            --text-tertiary: #8E949A;
+            --text-inverse: #FFFFFF;
             --link-blue: #3A5CF0;
-            --sidebar-bg: #1A1D21;
-            --sidebar-hover: #2A2D33;
-            --sidebar-active: #03C75A;
-            --sidebar-text: #B0B7C3;
-            --sidebar-text-active: #FFFFFF;
+            --live-red: #F04438;
+            --notice-cream: #FFF6E0;
+            --sidebar-width: 250px;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: "NanumSquare Neo", "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
-        body { background: var(--surface-muted); color: var(--text-primary); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
 
-        /* ─── 로그인 화면 ─── */
-        .auth-wrap { width: 100%; max-width: 440px; padding: 40px 24px; }
-        .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 44px 36px; text-align: center; }
-        .auth-logo { width: 56px; height: 56px; background: var(--naver-green-tint); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px; }
-        .auth-logo svg { color: var(--naver-green); }
-        .auth-card h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
-        .auth-card p { font-size: 13px; color: var(--text-secondary); margin-bottom: 28px; }
-        .auth-input { width: 100%; padding: 13px 16px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; transition: border 0.2s; margin-bottom: 12px; }
-        .auth-input:focus { border-color: var(--naver-green); }
-        .btn-primary { width: 100%; padding: 13px; background: var(--naver-green); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
-        .btn-primary:hover { background: var(--naver-green-pressed); }
-        .auth-err { color: var(--live-red); font-size: 13px; margin-top: 10px; min-height: 20px; }
-        .recovery-link { font-size: 12px; color: var(--text-tertiary); margin-top: 16px; cursor: pointer; text-decoration: underline; }
-        .recovery-box { display: none; background: #FAFBFC; border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-top: 16px; text-align: left; }
-        .recovery-box label { font-size: 12px; font-weight: 700; color: var(--text-secondary); display: block; margin-bottom: 4px; }
-        .recovery-box input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; margin-bottom: 8px; outline: none; }
-        .btn-sm { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; }
-        .btn-green { background: var(--naver-green); color: white; }
-        .btn-red { background: var(--live-red); color: white; }
-        .btn-blue { background: var(--link-blue); color: white; }
-        .btn-gray { background: #E4E8EB; color: var(--text-primary); }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "NanumSquare Neo", "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
 
-        /* ─── 대시보드 레이아웃 ─── */
-        .app { display: none; width: 100%; min-height: 100vh; }
-        .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 240px; background: var(--sidebar-bg); display: flex; flex-direction: column; z-index: 100; }
-        .sidebar-brand { padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-        .sidebar-brand .brand-icon { width: 36px; height: 36px; background: var(--naver-green); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; vertical-align: middle; }
-        .sidebar-brand h2 { display: inline; font-size: 16px; font-weight: 800; color: white; vertical-align: middle; }
-        .sidebar-brand p { font-size: 11px; color: var(--sidebar-text); margin-top: 8px; }
-        .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
-        .nav-section { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.3); letter-spacing: 0.08em; text-transform: uppercase; padding: 0 8px; margin: 20px 0 8px; }
-        .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; color: var(--sidebar-text); font-size: 13px; font-weight: 600; transition: all 0.15s; margin-bottom: 2px; user-select: none; }
-        .nav-item:hover { background: var(--sidebar-hover); color: white; }
-        .nav-item.active { background: rgba(3,199,90,0.15); color: var(--naver-green); }
-        .nav-item svg { flex-shrink: 0; opacity: 0.7; }
-        .nav-item.active svg { opacity: 1; }
-        .sidebar-footer { padding: 16px 12px; border-top: 1px solid rgba(255,255,255,0.08); }
-        .power-toggle { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: rgba(255,255,255,0.05); border-radius: 8px; }
-        .power-toggle span { font-size: 12px; font-weight: 700; color: white; }
-        .toggle-switch { position: relative; width: 40px; height: 22px; }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #444; border-radius: 22px; transition: 0.3s; }
-        .toggle-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
-        input:checked + .toggle-slider { background: var(--naver-green); }
-        input:checked + .toggle-slider:before { transform: translateX(18px); }
-        .main { margin-left: 240px; min-height: 100vh; padding: 32px 36px; }
-        .tab-pane { display: none; }
-        .tab-pane.active { display: block; }
-        .page-header { margin-bottom: 28px; }
-        .page-header h2 { font-size: 22px; font-weight: 800; }
-        .page-header p { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+        body {
+            background-color: var(--surface-muted);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
 
-        /* ─── 카드 ─── */
-        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 20px; }
-        .card-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-        .card-title svg { color: var(--naver-green); }
-        .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
-        .stat-card .label { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
-        .stat-card .value { font-size: 28px; font-weight: 800; }
+        /* ─── 로그인 뷰 ─── */
+        .auth-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 440px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 44px 36px;
+            text-align: center;
+        }
+
+        .auth-badge {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            background: var(--naver-green-tint);
+            border: 1px solid #c3edd3;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--naver-green);
+            margin-bottom: 20px;
+        }
+
+        .auth-badge svg {
+            width: 28px;
+            height: 28px;
+        }
+
+        .auth-card h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .auth-card p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 28px;
+            line-height: 1.5;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 13px 16px;
+            border: 1px solid var(--border-strong);
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            margin-bottom: 12px;
+            background: var(--surface);
+            color: var(--text-primary);
+            transition: border-color 0.15s;
+        }
+
+        .auth-input:focus {
+            border-color: var(--naver-green);
+            box-shadow: 0 0 0 1px var(--naver-green);
+        }
+
+        .btn-naver-primary {
+            width: 100%;
+            height: 48px;
+            background: var(--naver-green);
+            color: var(--text-inverse);
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-naver-primary:hover {
+            background: var(--naver-green-pressed);
+        }
+
+        .auth-error {
+            color: var(--live-red);
+            font-size: 13px;
+            margin-top: 12px;
+            min-height: 20px;
+        }
+
+        .auth-footer-link {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 18px;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .recovery-box {
+            display: none;
+            background: var(--surface-muted);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 18px;
+            margin-top: 18px;
+            text-align: left;
+        }
+
+        .recovery-box label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        /* ─── 대시보드 셸 레이아웃 (사이드바 + 메인) ─── */
+        .app-shell {
+            display: none;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: var(--sidebar-width);
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+        }
+
+        .sidebar-brand {
+            padding: 24px 20px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-logo {
+            width: 36px;
+            height: 36px;
+            background: var(--naver-green);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-title h2 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+
+        .sidebar-title span {
+            font-size: 11px;
+            color: var(--text-tertiary);
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 12px;
+            overflow-y: auto;
+        }
+
+        .nav-category {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-tertiary);
+            padding: 14px 12px 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-bottom: 3px;
+            user-select: none;
+        }
+
+        .nav-item:hover {
+            background: var(--surface-muted);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--naver-green-tint);
+            color: var(--naver-green);
+        }
+
+        .nav-item svg {
+            width: 18px;
+            height: 18px;
+            stroke-width: 2;
+        }
+
+        .sidebar-footer {
+            padding: 16px;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+        }
+
+        .sidebar-power-card {
+            background: var(--surface-muted);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .sidebar-power-info span {
+            font-size: 11px;
+            color: var(--text-secondary);
+            display: block;
+        }
+
+        .sidebar-power-info strong {
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 36px 44px;
+            min-height: 100vh;
+            max-width: 1400px;
+        }
+
+        .tab-pane {
+            display: none;
+            animation: fadeIn 0.15s ease-out;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ─── 페이지 헤더 ─── */
+        .page-header {
+            margin-bottom: 24px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+        }
+
+        .page-title h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .page-title p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            line-height: 1.5;
+        }
+
+        /* ─── 초보자 안내 가이드 배너 ─── */
+        .guide-box {
+            background: var(--notice-cream);
+            border: 1px solid #F1E5C6;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #5A471C;
+        }
+
+        .guide-box svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            color: #C58A00;
+            margin-top: 2px;
+        }
+
+        .guide-box strong {
+            font-weight: 700;
+            color: #3D2D0C;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        /* ─── 통계 그리드 ─── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px 22px;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+
         .stat-card .value.green { color: var(--naver-green); }
         .stat-card .value.red { color: var(--live-red); }
         .stat-card .value.blue { color: var(--link-blue); }
 
-        /* ─── 모드 선택 ─── */
-        .mode-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-        .mode-tab { padding: 8px 18px; border-radius: 20px; border: 1.5px solid var(--border); font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s; background: white; color: var(--text-secondary); }
-        .mode-tab.active { border-color: var(--naver-green); background: var(--naver-green-tint); color: var(--naver-green); }
-        .mode-desc { font-size: 12px; color: var(--text-secondary); padding: 10px 14px; background: #FAFBFC; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 16px; line-height: 1.6; }
+        /* ─── 네이버 스타일 카드 ─── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
 
-        /* ─── 테이블 ─── */
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        thead th { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-        tbody tr:hover { background: #FAFBFC; }
-        tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
-        .badge-green { background: var(--naver-green-tint); color: var(--naver-green); }
-        .badge-red { background: #FEF3F2; color: var(--live-red); }
-        .badge-blue { background: #EEF2FF; color: var(--link-blue); }
-        .badge-gray { background: #F3F4F6; color: var(--text-secondary); }
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
 
-        /* ─── 입력 행 ─── */
-        .input-row { display: flex; gap: 10px; align-items: center; }
-        .input-row input, .input-row select { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; transition: border 0.2s; }
-        .input-row input:focus { border-color: var(--naver-green); }
-        .tag-list { display: flex; flex-wrap: wrap; gap: 8px; min-height: 36px; padding: 4px 0; }
-        .tag { background: #F3F4F6; border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
-        .tag .del { cursor: pointer; color: var(--live-red); font-weight: 800; line-height: 1; }
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
-        /* ─── 로그 테이블 ─── */
-        .log-filter { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-        .log-filter input { padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; }
-        .log-filter select { padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; }
-        .pager { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 16px; font-size: 13px; }
-        .pager button { padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer; font-size: 13px; font-weight: 700; }
-        .pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .card-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
 
-        /* ─── 비밀번호 변경 ─── */
-        .pw-row { margin-bottom: 14px; }
-        .pw-row label { font-size: 12px; font-weight: 700; color: var(--text-secondary); display: block; margin-bottom: 6px; }
-        .pw-row input { width: 100%; max-width: 400px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; }
-        .pw-row input:focus { border-color: var(--naver-green); }
-        .sync-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-        .sync-row input { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; }
-        .info-box { background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 14px 16px; font-size: 13px; color: #1D4ED8; line-height: 1.6; margin-bottom: 16px; }
-        .info-box strong { display: block; margin-bottom: 4px; }
-        .sep { height: 1px; background: var(--border); margin: 20px 0; }
+        /* ─── 모드 선택 탭 (Online / Hybrid / Local) ─── */
+        .mode-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-bottom: 16px;
+        }
 
-        /* ─── 알림 토스트 ─── */
-        #toast { position: fixed; bottom: 28px; right: 28px; background: #1A1D21; color: white; padding: 14px 20px; border-radius: 10px; font-size: 14px; font-weight: 700; display: none; z-index: 9999; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
-        #toast.show { display: block; animation: slideUp 0.25s ease-out; }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        .tab-pane.active { animation: fadeIn 0.2s ease-out; }
+        .mode-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px 18px;
+            cursor: pointer;
+            transition: all 0.15s;
+            position: relative;
+        }
+
+        .mode-card:hover {
+            border-color: var(--border-strong);
+        }
+
+        .mode-card.active {
+            border-color: var(--naver-green);
+            background: #FAFEFB;
+        }
+
+        .mode-card.active::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--naver-green);
+            border-radius: 6px 6px 0 0;
+        }
+
+        .mode-card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .mode-card.active .mode-card-title {
+            color: var(--naver-green);
+        }
+
+        .mode-card-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* ─── 테이블 스타일 ─── */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+            background: var(--surface);
+        }
+
+        thead th {
+            background: #FAFBFC;
+            color: var(--text-secondary);
+            font-weight: 700;
+            font-size: 12px;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        tbody td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-primary);
+            vertical-align: middle;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background: #FAFBFC;
+        }
+
+        /* ─── 뱃지 & 태그 ─── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .badge-blocked {
+            background: #FEF3F2;
+            color: var(--live-red);
+            border: 1px solid #FECDCA;
+        }
+
+        .badge-allowed {
+            background: var(--naver-green-tint);
+            color: var(--naver-green);
+            border: 1px solid #D1FADF;
+        }
+
+        .badge-embed {
+            background: #EEF4FF;
+            color: var(--link-blue);
+            border: 1px solid #D1E0FF;
+        }
+
+        .badge-neutral {
+            background: var(--surface-muted);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        /* ─── 토글 스위치 ─── */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 38px;
+            height: 22px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #D1D5DB;
+            transition: .2s;
+            border-radius: 22px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .2s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--naver-green);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(16px);
+        }
+
+        /* ─── 버튼 ─── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 9px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+        }
+
+        .btn-green {
+            background: var(--naver-green);
+            color: white;
+        }
+        .btn-green:hover { background: var(--naver-green-pressed); }
+
+        .btn-red {
+            background: var(--live-red);
+            color: white;
+        }
+        .btn-red:hover { background: #D92D20; }
+
+        .btn-outline {
+            background: var(--surface);
+            border-color: var(--border-strong);
+            color: var(--text-primary);
+        }
+        .btn-outline:hover { background: var(--surface-muted); }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-del {
+            background: transparent;
+            color: var(--live-red);
+            border: 1px solid #FDA29B;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-del:hover {
+            background: #FEF3F2;
+        }
+
+        /* ─── 입력창 ─── */
+        .input-text {
+            padding: 9px 12px;
+            border: 1px solid var(--border-strong);
+            border-radius: 6px;
+            font-size: 13px;
+            color: var(--text-primary);
+            outline: none;
+            background: var(--surface);
+        }
+        .input-text:focus {
+            border-color: var(--naver-green);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        /* ─── 태그 목록 (임베드 화이트리스트) ─── */
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 12px;
+            background: var(--surface-muted);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            min-height: 48px;
+            align-items: center;
+        }
+
+        .parent-tag {
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-primary);
+        }
+
+        .parent-tag .remove-btn {
+            color: var(--text-tertiary);
+            cursor: pointer;
+            font-weight: 800;
+        }
+        .parent-tag .remove-btn:hover {
+            color: var(--live-red);
+        }
+
+        /* ─── 토스트 ─── */
+        #toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #1E1E23;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 700;
+            display: none;
+            z-index: 9999;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+        #toast.show {
+            display: block;
+            animation: fadeIn 0.2s ease-out;
+        }
     </style>
 </head>
 <body>
 
-<!-- ══════════════ 로그인 화면 ══════════════ -->
-<div class="auth-wrap" id="authView">
+<!-- ══════════════ 1. 로그인 화면 ══════════════ -->
+<div class="auth-wrapper" id="authView">
     <div class="auth-card">
-        <div class="auth-logo">
-            <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+        <div class="auth-badge">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" 
+                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
             </svg>
         </div>
-        <h1>Angry Web 대시보드</h1>
-        <p>관리자 마스터 비밀번호로 인증하세요</p>
-        <input class="auth-input" id="authPassword" type="password" placeholder="마스터 비밀번호 입력" onkeypress="if(event.key==='Enter') doLogin();">
-        <button class="btn-primary" onclick="doLogin()">대시보드 접속</button>
-        <div class="auth-err" id="authErr"></div>
-        <div class="recovery-link" onclick="toggleRecovery()">🔑 비밀번호를 잊으셨나요? (비상 복구)</div>
+        <h1>Angry Web 제어 대시보드</h1>
+        <p>자녀의 웹 사이트 차단 규칙과 실시간 방문 기록을 안전하게 관리하세요.</p>
+
+        <input class="auth-input" id="authPassword" type="password" placeholder="관리자 마스터 비밀번호 입력" onkeypress="if(event.key==='Enter') doLogin();">
+        <button class="btn-naver-primary" onclick="doLogin()">대시보드 로그인</button>
+        <div class="auth-error" id="authErr"></div>
+
+        <div class="auth-footer-link" onclick="toggleRecovery()">🔑 비밀번호를 잊으셨나요? (비상 복구)</div>
         <div class="recovery-box" id="recoveryBox">
-            <label>비상 복구 키</label>
-            <input id="resetKey" type="text" placeholder="비상 복구 키 입력 (기본: ANGRY-SAFE-2026-KEY)">
-            <label>새 비밀번호</label>
-            <input id="resetNewPw" type="password" placeholder="새 비밀번호">
-            <div style="display:flex;gap:8px;margin-top:4px;">
-                <button class="btn-sm btn-green" onclick="doResetPassword()">비밀번호 재설정</button>
-                <button class="btn-sm btn-gray" onclick="toggleRecovery()">취소</button>
+            <label>비상 복구 키 (기본: ANGRY-SAFE-2026-KEY)</label>
+            <input class="auth-input" id="resetKey" type="text" placeholder="비상 복구 키 입력">
+            <label>새로 설정할 비밀번호</label>
+            <input class="auth-input" id="resetNewPw" type="password" placeholder="새 비밀번호 입력">
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-green btn-sm" onclick="doResetPassword()">재설정 완료</button>
+                <button class="btn btn-outline btn-sm" onclick="toggleRecovery()">취소</button>
             </div>
-            <div id="resetMsg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+            <div id="resetMsg" style="font-size:12px; margin-top:8px; min-height:16px;"></div>
         </div>
     </div>
 </div>
 
-<!-- ══════════════ 대시보드 ══════════════ -->
-<div class="app" id="appView">
-    <!-- 사이드바 -->
+<!-- ══════════════ 2. 대시보드 메인 레이아웃 ══════════════ -->
+<div class="app-shell" id="appView">
+    <!-- 좌측 네비게이션 사이드바 -->
     <aside class="sidebar">
         <div class="sidebar-brand">
-            <span class="brand-icon">
-                <svg width="20" height="20" fill="none" stroke="white" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                </svg>
-            </span>
-            <h2>Angry Web</h2>
-            <p>집중 & 보안 필터</p>
+            <div class="sidebar-logo">N</div>
+            <div class="sidebar-title">
+                <h2>Angry Web</h2>
+                <span>보안 & 집중 모니터링</span>
+            </div>
         </div>
+
         <nav class="sidebar-nav">
-            <div class="nav-section">모니터링</div>
+            <div class="nav-category">모니터링</div>
             <div class="nav-item active" onclick="switchTab('home')">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                 대시보드 홈
             </div>
             <div class="nav-item" onclick="switchTab('log')">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                방문 사이트 로그
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                방문 사이트 기록
             </div>
-            <div class="nav-section">차단 정책</div>
+
+            <div class="nav-category">차단 규칙 관리</div>
             <div class="nav-item" onclick="switchTab('rules')">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
-                차단 룰 관리
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                차단 규칙 (블랙리스트)
             </div>
             <div class="nav-item" onclick="switchTab('embed')">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
-                인강 임베드 허용
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
+                인강 임베드 영상 허용
             </div>
-            <div class="nav-section">시스템</div>
+
+            <div class="nav-category">환경 설정</div>
             <div class="nav-item" onclick="switchTab('sync')">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                원격 동기화
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                원격 GitHub 연동
             </div>
             <div class="nav-item" onclick="switchTab('security')">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                보안 설정
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                비밀번호 & 보안
             </div>
         </nav>
+
         <div class="sidebar-footer">
-            <div class="power-toggle">
-                <span id="sidebarPowerLabel">🟢 필터 ON</span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="globalToggle" checked onchange="toggleGlobalPower()">
-                    <span class="toggle-slider"></span>
+            <div class="sidebar-power-card">
+                <div class="sidebar-power-info">
+                    <span>전체 필터링 상태</span>
+                    <strong id="sidebarPowerText">실행 중 (ON)</strong>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="globalPowerSwitch" checked onchange="togglePower()">
+                    <span class="slider"></span>
                 </label>
             </div>
-            <div style="margin-top:12px;">
-                <button class="btn-sm btn-gray" style="width:100%" onclick="doLogout()">🚪 로그아웃</button>
-            </div>
+            <button class="btn btn-outline btn-sm" style="width:100%" onclick="doLogout()">로그아웃</button>
         </div>
     </aside>
 
-    <!-- 메인 콘텐츠 -->
-    <main class="main">
-        <!-- ── 홈 탭 ── -->
+    <!-- 우측 메인 콘텐츠 영역 -->
+    <main class="main-content">
+
+        <!-- ════ 탭 1: 홈 ════ -->
         <div class="tab-pane active" id="tab-home">
             <div class="page-header">
-                <h2>📊 대시보드 홈</h2>
-                <p>Angry Web 현재 상태와 활동 현황을 한눈에 확인합니다.</p>
+                <div class="page-title">
+                    <h2>대시보드 홈</h2>
+                    <p>Angry Web 필터링 상태와 PC 이용 현황을 한눈에 모니터링합니다.</p>
+                </div>
+                <div>
+                    <button class="btn btn-outline btn-sm" onclick="syncNow()">🔄 즉시 원격 동기화</button>
+                </div>
             </div>
+
+            <div class="guide-box">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div>
+                    <strong>처음 오셨나요? 초보자를 위한 30초 안내</strong>
+                    Angry Web은 백그라운드 Windows 서비스로 조용히 작동하며 유해·오락 사이트를 원천 차단합니다.<br>
+                    • <strong>모드 선택</strong>: 기본값인 <strong>Online 모드</strong>는 공식 추천 블랙리스트를 자동 반영하며, <strong>Hybrid 모드</strong>는 온라인 규칙에 더해 부모님이 직접 특정 사이트의 허용/차단을 덮어쓸 수 있습니다.<br>
+                    • <strong>인강 시청</strong>: EBS, 메가스터디 등에서 유튜브 강의를 틀 때 막히지 않도록 '인강 임베드 영상 허용' 메뉴에서 도메인을 관리할 수 있습니다.
+                </div>
+            </div>
+
             <div class="stat-grid">
                 <div class="stat-card">
-                    <div class="label">📌 현재 상태</div>
-                    <div class="value green" id="statStatus">ON</div>
+                    <div class="label">필터링 엔진</div>
+                    <div class="value green" id="statPowerStatus">ON</div>
                 </div>
                 <div class="stat-card">
-                    <div class="label">🛡️ 활성 룰 수</div>
-                    <div class="value" id="statRules">-</div>
+                    <div class="label">적용 중인 차단 룰</div>
+                    <div class="value" id="statActiveRules">-</div>
                 </div>
                 <div class="stat-card">
-                    <div class="label">🚫 오늘 차단</div>
-                    <div class="value red" id="statBlocked">-</div>
+                    <div class="label">차단된 접근 시도</div>
+                    <div class="value red" id="statBlockedCount">-</div>
                 </div>
                 <div class="stat-card">
-                    <div class="label">✅ 오늘 허용</div>
-                    <div class="value blue" id="statAllowed">-</div>
+                    <div class="label">정상 접속 확인</div>
+                    <div class="value blue" id="statAllowedCount">-</div>
                 </div>
             </div>
+
             <div class="card">
-                <div class="card-title">
-                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    현재 적용 모드
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">차단 규칙 적용 모드</div>
+                        <div class="card-subtitle">상황에 맞게 룰 적용 방식을 선택할 수 있습니다.</div>
+                    </div>
                 </div>
-                <div class="mode-tabs" id="homeModes">
-                    <div class="mode-tab" id="homeMode-Online" onclick="quickSetMode('Online')">🌐 Online</div>
-                    <div class="mode-tab" id="homeMode-Hybrid" onclick="quickSetMode('Hybrid')">⚡ Hybrid</div>
-                    <div class="mode-tab" id="homeMode-Local" onclick="quickSetMode('Local')">💻 Local</div>
+
+                <div class="mode-selector">
+                    <div class="mode-card active" id="homeModeCard-Online" onclick="selectRuleMode('Online')">
+                        <div class="mode-card-title">
+                            <span>🌐 온라인 모드 (추천)</span>
+                            <span class="badge badge-allowed">기본</span>
+                        </div>
+                        <div class="mode-card-desc">
+                            GitHub에서 최신으로 검증된 블랙리스트(게임/쇼츠/웹툰 등)를 자동 동기화하여 적용합니다.
+                        </div>
+                    </div>
+
+                    <div class="mode-card" id="homeModeCard-Hybrid" onclick="selectRuleMode('Hybrid')">
+                        <div class="mode-card-title">
+                            <span>⚡ 하이브리드 모드</span>
+                            <span class="badge badge-embed">로컬 우선</span>
+                        </div>
+                        <div class="mode-card-desc">
+                            온라인 규칙을 기본으로 쓰되, 로컬에서 특정 룰을 끄면 온라인에서 차단 중이어도 즉시 접속을 허용합니다.
+                        </div>
+                    </div>
+
+                    <div class="mode-card" id="homeModeCard-Local" onclick="selectRuleMode('Local')">
+                        <div class="mode-card-title">
+                            <span>💻 로컬 단독 모드</span>
+                            <span class="badge badge-neutral">수동</span>
+                        </div>
+                        <div class="mode-card-desc">
+                            원격 동기화를 끄고, 관리자가 아래에서 직접 등록한 로컬 규칙만 적용합니다.
+                        </div>
+                    </div>
                 </div>
-                <div class="mode-desc" id="homeModeDesc">모드를 선택하세요.</div>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <button class="btn-sm btn-green" onclick="saveHomeModeOnly()">✔ 모드 저장</button>
-                    <button class="btn-sm btn-blue" onclick="syncNow()">🔄 즉시 동기화</button>
+
+                <div style="display:flex; justify-content:flex-end;">
+                    <button class="btn btn-green" onclick="saveRulesSettings()">모드 변경 사항 저장</button>
                 </div>
             </div>
+
             <div class="card">
-                <div class="card-title">🕐 최근 방문 사이트 (최신 10건)</div>
-                <table>
-                    <thead><tr><th>시각</th><th>호스트</th><th>상태</th></tr></thead>
-                    <tbody id="recentLogBody"></tbody>
-                </table>
-                <div style="margin-top:12px;"><button class="btn-sm btn-gray" onclick="switchTab('log')">전체 로그 보기 →</button></div>
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">최근 방문 사이트 미리보기</div>
+                        <div class="card-subtitle">PC에서 최근 요청된 주요 웹 사이트 10건입니다.</div>
+                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="switchTab('log')">전체 기록 보기 →</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:160px;">접속 시각</th>
+                                <th>도메인 (호스트)</th>
+                                <th style="width:120px;">판정 상태</th>
+                            </tr>
+                        </thead>
+                        <tbody id="homeRecentLogTable">
+                            <tr><td colspan="3" style="text-align:center; padding:24px; color:var(--text-tertiary);">기록을 불러오는 중...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <!-- ── 방문 로그 탭 ── -->
+        <!-- ════ 탭 2: 방문 사이트 기록 ════ -->
         <div class="tab-pane" id="tab-log">
             <div class="page-header">
-                <h2>📜 방문 사이트 로그</h2>
-                <p>아이가 방문한 모든 사이트를 관리자만 확인할 수 있습니다. (차단/허용 모두 포함)</p>
+                <div class="page-title">
+                    <h2>방문 사이트 기록</h2>
+                    <p>자녀가 PC 브라우저로 접속한 모든 웹사이트의 주소와 차단/허용 여부를 관리자만 열람할 수 있습니다.</p>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-outline btn-sm" onclick="loadLogData(1)">새로고침</button>
+                    <button class="btn btn-red btn-sm" onclick="clearAllLogs()">기록 전체 비우기</button>
+                </div>
             </div>
-            <div class="log-filter">
-                <input id="logFilterHost" type="text" placeholder="🔍 호스트 필터 (예: youtube.com)">
-                <select id="logFilterBlocked">
-                    <option value="">전체</option>
-                    <option value="true">차단된 사이트만</option>
-                    <option value="false">허용된 사이트만</option>
-                </select>
-                <button class="btn-sm btn-blue" onclick="loadLog(1)">검색</button>
-                <button class="btn-sm btn-red" onclick="clearLog()" style="margin-left:auto;">🗑 로그 전체 삭제</button>
+
+            <div class="guide-box">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div>
+                    <strong>방문 기록 활용 팁</strong>
+                    • 이미지는 제외하고 실제 사용자가 들어간 웹 페이지 요청만 선별 기록됩니다.<br>
+                    • 우측 [차단 룰에 추가] 버튼을 누르면 의심스러운 사이트를 그 자리에서 즉시 차단 블랙리스트에 올릴 수 있습니다.
+                </div>
             </div>
-            <div class="card" style="padding:0;overflow:hidden;">
-                <table>
-                    <thead><tr><th style="width:160px">시각</th><th>호스트</th><th>URL</th><th style="width:90px">상태</th><th>룰</th></tr></thead>
-                    <tbody id="logTableBody"></tbody>
-                </table>
+
+            <div class="card" style="padding:16px; margin-bottom:16px;">
+                <div class="form-row">
+                    <input class="input-text" id="logFilterHost" type="text" placeholder="도메인 검색 (예: naver, youtube)" style="width:260px;">
+                    <select class="input-text" id="logFilterType" style="width:160px;">
+                        <option value="">모든 접속 기록</option>
+                        <option value="true">차단된 사이트만</option>
+                        <option value="false">허용된 사이트만</option>
+                    </select>
+                    <button class="btn btn-green btn-sm" onclick="loadLogData(1)">검색 필터 적용</button>
+                </div>
             </div>
-            <div class="pager">
-                <button id="logPrevBtn" onclick="loadLog(currentLogPage-1)" disabled>◀ 이전</button>
-                <span id="logPageInfo">-</span>
-                <button id="logNextBtn" onclick="loadLog(currentLogPage+1)" disabled>다음 ▶</button>
+
+            <div class="card" style="padding:0; overflow:hidden;">
+                <div class="table-responsive" style="border:none;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:150px;">접속 일시</th>
+                                <th style="width:180px;">도메인 (호스트)</th>
+                                <th>전체 URL 주소</th>
+                                <th style="width:110px;">결과</th>
+                                <th style="width:140px;">매칭된 규칙</th>
+                                <th style="width:90px; text-align:center;">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fullLogTable">
+                            <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-tertiary);">접속 기록을 조회하고 있습니다...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:center; gap:16px; margin-top:20px;">
+                <button class="btn btn-outline btn-sm" id="btnLogPrev" onclick="loadLogData(currentLogPage-1)" disabled>◀ 이전</button>
+                <span id="logPageText" style="font-size:13px; font-weight:700; color:var(--text-secondary);">-</span>
+                <button class="btn btn-outline btn-sm" id="btnLogNext" onclick="loadLogData(currentLogPage+1)" disabled>다음 ▶</button>
             </div>
         </div>
 
-        <!-- ── 차단 룰 탭 ── -->
+        <!-- ════ 탭 3: 차단 규칙 (블랙리스트) ════ -->
         <div class="tab-pane" id="tab-rules">
             <div class="page-header">
-                <h2>🛡️ 차단 룰 관리</h2>
-                <p>로컬/온라인/하이브리드 모드와 차단 패턴을 관리합니다.</p>
-            </div>
-            <div class="card">
-                <div class="card-title">적용 모드</div>
-                <div class="mode-tabs">
-                    <div class="mode-tab" id="ruleMode-Online" onclick="setMode('Online')">🌐 Online</div>
-                    <div class="mode-tab" id="ruleMode-Hybrid" onclick="setMode('Hybrid')">⚡ Hybrid</div>
-                    <div class="mode-tab" id="ruleMode-Local" onclick="setMode('Local')">💻 Local</div>
+                <div class="page-title">
+                    <h2>차단 규칙 (블랙리스트)</h2>
+                    <p>특정 유해/오락 사이트의 접근을 막는 차단 규칙 목록을 관리합니다.</p>
                 </div>
-                <div class="mode-desc" id="ruleModeDesc">모드를 선택하세요.</div>
+                <button class="btn btn-green" onclick="saveRulesSettings()">💾 모든 규칙 변경사항 저장</button>
             </div>
-            <div class="card">
-                <div class="card-title">로컬 차단 룰</div>
-                <div class="input-row" style="margin-bottom:12px;">
-                    <input id="newPattern" type="text" placeholder="차단 패턴 (예: *.tiktok.com/*)">
-                    <input id="newDesc" type="text" placeholder="설명 (선택)">
-                    <button class="btn-sm btn-red" onclick="addLocalRule()">+ 추가</button>
+
+            <div class="guide-box">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div>
+                    <strong>규칙 패턴 작성 방법</strong><br>
+                    • <strong>전체 도메인 차단</strong>: <code>*.tiktok.com/*</code> (앞뒤에 * 기호를 넣으면 서브도메인까지 전부 막힙니다)<br>
+                    • <strong>특정 페이지만 차단</strong>: <code>*.youtube.com/shorts/*</code> (유튜브 일반 영상은 놔두고 쇼츠만 막을 때)
                 </div>
-                <table>
-                    <thead><tr><th>패턴</th><th>설명</th><th style="width:60px">활성</th><th style="width:60px">삭제</th></tr></thead>
-                    <tbody id="rulesTableBody"></tbody>
-                </table>
             </div>
+
             <div class="card">
-                <div class="card-title">온라인 룰 현황</div>
-                <p style="font-size:13px;color:var(--text-secondary);">GitHub에서 동기화된 룰: <strong id="onlineRulesCount">-</strong>개</p>
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">내 PC 전용 로컬 규칙 추가</div>
+                        <div class="card-subtitle">부모님이 직접 차단하고 싶은 도메인이나 키워드를 추가하세요.</div>
+                    </div>
+                </div>
+
+                <div class="form-row" style="margin-bottom:16px;">
+                    <input class="input-text" id="newRulePattern" type="text" placeholder="차단 패턴 (예: *.roblox.com/*)" style="flex:2;">
+                    <input class="input-text" id="newRuleDesc" type="text" placeholder="설명 (예: 로블록스 게임 차단)" style="flex:2;">
+                    <button class="btn btn-green" onclick="addLocalRuleItem()">+ 규칙 추가</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:30%;">차단 패턴</th>
+                                <th style="width:40%;">규칙 설명</th>
+                                <th style="width:15%; text-align:center;">활성화 여부</th>
+                                <th style="width:15%; text-align:center;">삭제</th>
+                            </tr>
+                        </thead>
+                        <tbody id="localRulesTableBody">
+                            <tr><td colspan="4" style="text-align:center; padding:24px; color:var(--text-tertiary);">등록된 로컬 규칙이 없습니다. 위 입력창에서 추가해보세요.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <button class="btn-sm btn-green" onclick="saveAllRules()">💾 전체 저장 및 적용</button>
+
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">GitHub 공식 온라인 규칙 목록 (<span id="onlineRulesHeaderCount">0</span>개)</div>
+                        <div class="card-subtitle">원격 저장소에서 자동으로 배포 및 갱신되는 안전 권장 블랙리스트입니다.</div>
+                    </div>
+                </div>
+
+                <div class="table-responsive" style="max-height: 380px; overflow-y:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:35%;">차단 패턴</th>
+                                <th style="width:50%;">설명</th>
+                                <th style="width:15%; text-align:center;">상태</th>
+                            </tr>
+                        </thead>
+                        <tbody id="onlineRulesTableBody">
+                            <tr><td colspan="3" style="text-align:center; padding:24px; color:var(--text-tertiary);">온라인 규칙을 조회 중입니다...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
-        <!-- ── 인강 임베드 탭 ── -->
+        <!-- ════ 탭 4: 인강 임베드 영상 허용 ════ -->
         <div class="tab-pane" id="tab-embed">
             <div class="page-header">
-                <h2>🎓 인강 임베드 허용</h2>
-                <p>허용된 인강 사이트에서 iframe으로 불러오는 유튜브 등 미디어 콘텐츠를 차단에서 제외합니다.</p>
+                <div class="page-title">
+                    <h2>인강 임베드 영상 허용 (화이트리스트)</h2>
+                    <p>인터넷 강의 사이트 안에서 유튜브 강의 영상을 틀 때, 차단되지 않고 원활히 재생되도록 부모 사이트를 등록합니다.</p>
+                </div>
+                <button class="btn btn-green" onclick="saveRulesSettings()">💾 변경사항 저장</button>
             </div>
+
+            <div class="guide-box">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div>
+                    <strong>인강 임베드 허용 작동 원리</strong><br>
+                    EBS, 메가스터디 등의 인강 사이트에서 유튜브에 업로드된 해설 강의를 iframe으로 불러올 때, 브라우저는 원래 페이지 주소(Referer)를 전달합니다.<br>
+                    Angry Web은 유튜브 자체를 차단하고 있더라도, 아래 등록된 <strong>공부 사이트 안에서 재생되는 영상은 똑똑하게 인식하여 통과</strong>시킵니다.
+                </div>
+            </div>
+
             <div class="card">
-                <div class="info-box">
-                    <strong>💡 작동 원리</strong>
-                    EBS, 메가스터디 등의 인강 사이트 안에서 유튜브 강의 영상을 불러올 때, 브라우저는 Referer 헤더에 부모 사이트 주소를 담아 보냅니다.
-                    Angry Web이 이 헤더를 감지하여 등록된 허용 도메인 목록에 있으면 차단을 건너뜁니다.
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">등록된 인강 사이트 목록</div>
+                        <div class="card-subtitle">이 사이트들 안에서 재생되는 외부 동영상은 차단 대상에서 제외됩니다.</div>
+                    </div>
                 </div>
-                <div class="card-title">허용 인강 도메인 목록</div>
-                <div class="tag-list" id="embedParentList"></div>
-                <div class="input-row" style="margin-top:14px;">
-                    <input id="newEmbedParent" type="text" placeholder="인강 도메인 추가 (예: ebs.co.kr)">
-                    <button class="btn-sm btn-green" onclick="addEmbedParent()">+ 추가</button>
+
+                <div class="tags-container" id="embedTagContainer"></div>
+
+                <div class="form-row" style="margin-top:16px;">
+                    <input class="input-text" id="newEmbedInput" type="text" placeholder="새 인강 도메인 (예: ebs.co.kr, megastudy.net)" style="width:320px;">
+                    <button class="btn btn-green" onclick="addEmbedTagItem()">+ 사이트 추가</button>
                 </div>
             </div>
-            <button class="btn-sm btn-green" onclick="saveAllRules()">💾 저장 및 적용</button>
         </div>
 
-        <!-- ── 원격 동기화 탭 ── -->
+        <!-- ════ 탭 5: 원격 동기화 ════ -->
         <div class="tab-pane" id="tab-sync">
             <div class="page-header">
-                <h2>🔄 원격 동기화</h2>
-                <p>GitHub 저장소에서 차단 룰을 자동으로 가져옵니다. 외부에서 rules.json을 수정하면 집에 있는 PC에 자동 적용됩니다.</p>
+                <div class="page-title">
+                    <h2>원격 GitHub 동기화</h2>
+                    <p>부모님이 밖에서 스마트폰이나 다른 PC로 GitHub의 rules.json 파일을 수정하면, 집의 PC가 자동으로 최신 룰을 반영합니다.</p>
+                </div>
             </div>
+
+            <div class="guide-box">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div>
+                    <strong>다른 곳(회사, 스마트폰)에서 룰을 원격 제어하는 방법</strong><br>
+                    1. 본인의 GitHub에 포크(Fork)하거나 저장소를 만든 후 <code>rules.json</code> 파일을 올려둡니다.<br>
+                    2. 아래의 GitHub Rules URL에 해당 raw 링크를 입력하고 저장합니다.<br>
+                    3. 회사나 밖에서 깃허브 웹사이트에 들어가 rules.json에 새 사이트를 적어두기만 하면, 집의 아이 PC가 설정된 주기(예: 10분마다)로 스스로 내려받아 적용합니다!
+                </div>
+            </div>
+
             <div class="card">
-                <div class="info-box">
-                    <strong>📱 외부에서 룰 업데이트하는 방법</strong>
-                    1. GitHub 저장소(아래 URL)의 rules.json 파일을 수정합니다.<br>
-                    2. 아이 PC는 설정된 주기(기본 10분)마다 자동으로 최신 룰을 가져와 즉시 적용합니다.<br>
-                    3. 아래 "지금 동기화"를 누르면 즉시 적용할 수 있습니다.
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">원격 규칙 URL (Raw 주소)</div>
+                        <div class="card-subtitle">최신 차단 룰을 받아올 GitHub의 Raw JSON URL입니다.</div>
+                    </div>
                 </div>
-                <div class="card-title">GitHub 룰 URL</div>
-                <div class="sync-row">
-                    <input id="syncUrl" type="text" placeholder="https://raw.githubusercontent.com/...">
-                    <button class="btn-sm btn-blue" onclick="saveSyncUrl()">URL 저장</button>
+
+                <div class="form-row" style="margin-bottom:20px;">
+                    <input class="input-text" id="syncGithubUrlInput" type="text" style="flex:1;">
+                    <button class="btn btn-green" onclick="saveRulesSettings()">URL 저장</button>
                 </div>
-                <div class="card-title" style="margin-top:16px;">동기화 주기</div>
-                <div class="sync-row">
-                    <select id="syncInterval" style="max-width:200px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:13px;outline:none;">
-                        <option value="5">5분마다</option>
-                        <option value="10" selected>10분마다</option>
-                        <option value="30">30분마다</option>
-                        <option value="60">1시간마다</option>
+
+                <div class="card-header" style="margin-top:24px;">
+                    <div>
+                        <div class="card-title">자동 갱신 주기</div>
+                        <div class="card-subtitle">집 PC가 원격 저장소를 확인하는 주기입니다.</div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <select class="input-text" id="syncIntervalSelect" style="width:200px;">
+                        <option value="5">5분마다 동기화</option>
+                        <option value="10" selected>10분마다 동기화 (권장)</option>
+                        <option value="30">30분마다 동기화</option>
+                        <option value="60">1시간마다 동기화</option>
                     </select>
-                    <button class="btn-sm btn-green" onclick="saveSyncInterval()">저장</button>
-                </div>
-                <div style="margin-top:20px;">
-                    <button class="btn-sm btn-blue" onclick="syncNow()">🔄 지금 동기화</button>
+                    <button class="btn btn-green" onclick="saveRulesSettings()">주기 저장</button>
+                    <button class="btn btn-outline" onclick="syncNow()" style="margin-left:auto;">지금 즉시 갱신 (Sync Now)</button>
                 </div>
             </div>
         </div>
 
-        <!-- ── 보안 설정 탭 ── -->
+        <!-- ════ 탭 6: 비밀번호 & 보안 ════ -->
         <div class="tab-pane" id="tab-security">
             <div class="page-header">
-                <h2>🔒 보안 설정</h2>
-                <p>비밀번호 변경 및 보안 정책을 관리합니다.</p>
+                <div class="page-title">
+                    <h2>비밀번호 & 보안 보호 정책</h2>
+                    <p>관리자 비밀번호를 안전하게 변경하고 적용 중인 시스템 방어 설정을 확인합니다.</p>
+                </div>
             </div>
+
             <div class="card">
-                <div class="card-title">비밀번호 변경</div>
-                <div class="pw-row"><label>현재 비밀번호</label><input id="curPw" type="password" placeholder="현재 비밀번호 입력"></div>
-                <div class="pw-row"><label>새 비밀번호</label><input id="newPw" type="password" placeholder="새 비밀번호 입력"></div>
-                <div class="pw-row"><label>새 비밀번호 확인</label><input id="newPwConfirm" type="password" placeholder="새 비밀번호 재입력"></div>
-                <button class="btn-sm btn-green" onclick="changePassword()">비밀번호 변경</button>
-                <div id="pwMsg" style="font-size:13px;margin-top:10px;min-height:16px;"></div>
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">관리자 마스터 비밀번호 변경</div>
+                        <div class="card-subtitle">대시보드 접속 및 차단 페이지 일시 해제 시 사용되는 암호입니다.</div>
+                    </div>
+                </div>
+
+                <div style="max-width:440px;">
+                    <div style="margin-bottom:14px;">
+                        <label style="font-size:12px; font-weight:700; color:var(--text-secondary); display:block; margin-bottom:6px;">현재 비밀번호</label>
+                        <input class="input-text" id="pwCurrent" type="password" placeholder="현재 비밀번호" style="width:100%;">
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <label style="font-size:12px; font-weight:700; color:var(--text-secondary); display:block; margin-bottom:6px;">새 비밀번호</label>
+                        <input class="input-text" id="pwNew" type="password" placeholder="새 비밀번호" style="width:100%;">
+                    </div>
+                    <div style="margin-bottom:18px;">
+                        <label style="font-size:12px; font-weight:700; color:var(--text-secondary); display:block; margin-bottom:6px;">새 비밀번호 확인</label>
+                        <input class="input-text" id="pwConfirm" type="password" placeholder="새 비밀번호 다시 입력" style="width:100%;">
+                    </div>
+                    <button class="btn btn-green" onclick="doChangePassword()">비밀번호 변경 완료</button>
+                    <div id="pwChangeMsg" style="font-size:13px; margin-top:10px; min-height:16px;"></div>
+                </div>
             </div>
+
             <div class="card">
-                <div class="card-title">보안 정책 안내</div>
-                <div class="info-box">
-                    <strong>🔐 적용 중인 보안 정책</strong>
-                    • 비밀번호 연속 5회 오류 시 10분간 로그인 잠금<br>
-                    • 대시보드 세션 2시간 자동 만료<br>
-                    • 비밀번호 SHA-256 해시 저장<br>
-                    • 비상 복구 키: ANGRY-SAFE-2026-KEY (관리자만 사용 가능)<br>
-                    • 설치 폴더 NTFS ACL 잠금 (일반 사용자 삭제/변조 불가)<br>
-                    • Windows Service DACL 보호 (일반 사용자 중지 불가)<br>
-                    • 프록시 레지스트리 Watchdog (우회 차단)
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">활성화된 시스템 보안 방어 내역</div>
+                        <div class="card-subtitle">자녀의 우회 및 임의 종료를 막기 위해 서비스 자체에 적용된 보호 체계입니다.</div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:25%;">보안 기능</th>
+                                <th>보호 내용</th>
+                                <th style="width:15%; text-align:center;">상태</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>5회 오류 시 10분 잠금</strong></td>
+                                <td>비밀번호를 연속으로 틀릴 시 무차별 대입 공격을 막기 위해 10분간 입력창이 차단됩니다.</td>
+                                <td style="text-align:center;"><span class="badge badge-allowed">적용 중</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>NTFS 폴더 삭제 방지</strong></td>
+                                <td>Program Files 설치 폴더를 일반 사용자가 권한 없이 지우거나 파일을 변조하지 못하도록 ACL 잠금합니다.</td>
+                                <td style="text-align:center;"><span class="badge badge-allowed">적용 중</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>서비스 강제 중지 차단</strong></td>
+                                <td>작업 관리자나 서비스 제어판에서 일반 사용자가 서비스를 끄지 못하도록 보호합니다.</td>
+                                <td style="text-align:center;"><span class="badge badge-allowed">적용 중</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>프록시 실시간 감시 (Watchdog)</strong></td>
+                                <td>윈도우 네트워크 설정에서 프록시를 끄더라도 5초 이내에 강제로 자동 복구하여 필터링을 유지합니다.</td>
+                                <td style="text-align:center;"><span class="badge badge-allowed">적용 중</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>비상 복구 키 체계</strong></td>
+                                <td>비밀번호를 완전히 분실했을 때 관리자 승인 창이나 비상 키를 통해 복원할 수 있습니다.</td>
+                                <td style="text-align:center;"><span class="badge badge-allowed">적용 중</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
+
     </main>
 </div>
 
 <div id="toast"></div>
 
+<!-- ══════════════ 3. 프론트엔드 자바스크립트 ══════════════ -->
 <script>
     let currentToken = '';
     let currentConfig = null;
     let selectedMode = 'Online';
     let localRules = [];
+    let onlineRules = [];
     let allowedEmbedParents = [];
     let isEnabled = true;
     let currentLogPage = 1;
 
-    // ── 모드 설명 ──
-    const modeDescs = {
-        Online: '☁️ <strong>Online 모드</strong>: GitHub에서 동기화한 최신 차단 룰만 적용합니다.',
-        Hybrid: '⚡ <strong>Hybrid 모드</strong>: 온라인 룰 + 로컬 룰을 병합 적용합니다. 로컬에서 false로 설정한 패턴은 온라인이 true여도 차단 제외됩니다.',
-        Local:  '💻 <strong>Local 모드</strong>: GitHub 동기화 없이 직접 추가한 로컬 룰만 적용합니다.'
-    };
-
     // ── 로그인 ──
     async function doLogin() {
-        const pw = document.getElementById('authPassword').value;
-        const err = document.getElementById('authErr');
-        err.innerText = '';
+        const pwInput = document.getElementById('authPassword');
+        const errDiv = document.getElementById('authErr');
+        errDiv.innerText = '';
+
+        if (!pwInput.value) {
+            errDiv.innerText = '비밀번호를 입력해주세요.';
+            return;
+        }
+
         try {
-            const r = await fetch('/api/dashboard/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:pw}) });
-            const d = await r.json();
-            if (d.success) {
-                currentToken = d.token;
+            const res = await fetch('/api/dashboard/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pwInput.value })
+            });
+            const data = await res.json();
+            if (data.success) {
+                currentToken = data.token;
                 document.getElementById('authView').style.display = 'none';
                 document.getElementById('appView').style.display = 'block';
-                await loadConfig();
-                await loadRecentLog();
+                await loadConfigData();
+                await loadHomeRecentLogs();
             } else {
-                err.innerText = d.message || '비밀번호가 올바르지 않습니다.';
+                errDiv.innerText = data.message || '비밀번호가 올바르지 않습니다.';
             }
-        } catch { err.innerText = '서버 통신 오류가 발생했습니다.'; }
+        } catch {
+            errDiv.innerText = '서버와 통신할 수 없습니다.';
+        }
     }
 
     function doLogout() {
@@ -1288,339 +2116,536 @@ public class BlockPageServer
     }
 
     function toggleRecovery() {
-        const b = document.getElementById('recoveryBox');
-        b.style.display = b.style.display === 'block' ? 'none' : 'block';
+        const box = document.getElementById('recoveryBox');
+        box.style.display = box.style.display === 'block' ? 'none' : 'block';
     }
 
     async function doResetPassword() {
         const key = document.getElementById('resetKey').value.trim();
         const newPw = document.getElementById('resetNewPw').value.trim();
         const msg = document.getElementById('resetMsg');
-        if (!key || !newPw) { msg.style.color='var(--live-red)'; msg.innerText='비상 키와 새 비밀번호를 모두 입력하세요.'; return; }
+
+        if (!key || !newPw) {
+            msg.style.color = 'var(--live-red)';
+            msg.innerText = '비상 키와 새 비밀번호를 모두 입력하세요.';
+            return;
+        }
+
         try {
-            const r = await fetch('/api/dashboard/reset-password', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recoveryKey:key, newPassword:newPw}) });
-            const d = await r.json();
-            if (d.success) {
+            const res = await fetch('/api/dashboard/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recoveryKey: key, newPassword: newPw })
+            });
+            const data = await res.json();
+            if (data.success) {
                 msg.style.color = 'var(--naver-green)';
-                msg.innerText = d.message;
-                setTimeout(() => { toggleRecovery(); document.getElementById('authPassword').value = newPw; }, 1500);
+                msg.innerText = data.message;
+                setTimeout(() => {
+                    toggleRecovery();
+                    document.getElementById('authPassword').value = newPw;
+                }, 1500);
             } else {
                 msg.style.color = 'var(--live-red)';
-                msg.innerText = d.message || '재설정 실패';
+                msg.innerText = data.message || '재설정 실패';
             }
-        } catch { msg.style.color='var(--live-red)'; msg.innerText='서버 통신 오류'; }
+        } catch {
+            msg.style.color = 'var(--live-red)';
+            msg.innerText = '서버 통신 오류';
+        }
     }
 
     // ── 탭 전환 ──
-    function switchTab(name) {
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        document.getElementById('tab-' + name).classList.add('active');
-        event.currentTarget.classList.add('active');
-        if (name === 'log') loadLog(1);
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+        const targetPane = document.getElementById('tab-' + tabId);
+        if (targetPane) targetPane.classList.add('active');
+
+        // 사이드바 active 표시
+        const items = document.querySelectorAll('.nav-item');
+        items.forEach(item => {
+            if (item.getAttribute('onclick')?.includes(tabId)) {
+                item.classList.add('active');
+            }
+        });
+
+        if (tabId === 'log') {
+            loadLogData(1);
+        } else if (tabId === 'home') {
+            loadHomeRecentLogs();
+        }
     }
 
-    // ── 설정 로드 ──
-    async function loadConfig() {
+    // ── 설정 데이터 로드 ──
+    async function loadConfigData() {
         try {
-            const r = await fetch('/api/dashboard/config', { headers:{'X-Dashboard-Token':currentToken} });
-            const d = await r.json();
-            currentConfig = d;
-            selectedMode = d.ruleMode || 'Online';
-            localRules = d.localRules || [];
-            allowedEmbedParents = d.allowedEmbedParents || [];
-            isEnabled = d.isEnabled !== false;
+            const res = await fetch('/api/dashboard/config', {
+                headers: { 'X-Dashboard-Token': currentToken }
+            });
+            const data = await res.json();
+            currentConfig = data;
+
+            selectedMode = data.ruleMode || 'Online';
+            localRules = data.localRules || [];
+            onlineRules = data.onlineRules || [];
+            allowedEmbedParents = data.allowedEmbedParents || [];
+            isEnabled = data.isEnabled !== false;
 
             // 홈 통계
-            document.getElementById('statStatus').innerText = isEnabled ? 'ON' : 'OFF';
-            document.getElementById('statStatus').className = 'value ' + (isEnabled ? 'green' : 'red');
-            document.getElementById('statRules').innerText = d.activeRulesCount ?? '-';
-            document.getElementById('onlineRulesCount').innerText = d.onlineRulesCount ?? '-';
+            document.getElementById('statPowerStatus').innerText = isEnabled ? 'ON' : 'OFF';
+            document.getElementById('statPowerStatus').className = 'value ' + (isEnabled ? 'green' : 'red');
+            document.getElementById('statActiveRules').innerText = (data.activeRulesCount ?? 0) + '개';
 
-            // URL/interval
-            if (d.gitHubRulesUrl) document.getElementById('syncUrl').value = d.gitHubRulesUrl;
-            if (d.syncIntervalMinutes) {
-                const sel = document.getElementById('syncInterval');
-                for (let o of sel.options) { if (o.value == d.syncIntervalMinutes) { o.selected = true; break; } }
+            // 사이드바 토글
+            document.getElementById('globalPowerSwitch').checked = isEnabled;
+            document.getElementById('sidebarPowerText').innerText = isEnabled ? '실행 중 (ON)' : '일시정지 (OFF)';
+
+            // 원격 설정 입력창
+            if (data.gitHubRulesUrl) {
+                document.getElementById('syncGithubUrlInput').value = data.gitHubRulesUrl;
+            }
+            if (data.syncIntervalMinutes) {
+                document.getElementById('syncIntervalSelect').value = data.syncIntervalMinutes;
             }
 
-            // 토글
-            document.getElementById('globalToggle').checked = isEnabled;
-            document.getElementById('sidebarPowerLabel').innerText = isEnabled ? '🟢 필터 ON' : '🔴 필터 OFF';
-
-            setMode(selectedMode);
-            renderRulesTable();
-            renderEmbedParents();
-        } catch (e) { toast('설정을 불러오지 못했습니다.'); }
+            selectRuleMode(selectedMode, false);
+            renderLocalRulesTable();
+            renderOnlineRulesTable();
+            renderEmbedTags();
+        } catch (e) {
+            showToast('설정 데이터를 불러오지 못했습니다.');
+        }
     }
 
     // ── 모드 선택 ──
-    function setMode(m) {
-        selectedMode = m;
-        ['Online','Hybrid','Local'].forEach(n => {
-            const ruleEl = document.getElementById('ruleMode-' + n);
-            const homeEl = document.getElementById('homeMode-' + n);
-            if (ruleEl) ruleEl.classList.toggle('active', n === m);
-            if (homeEl) homeEl.classList.toggle('active', n === m);
+    function selectRuleMode(mode, triggerSave = false) {
+        selectedMode = mode;
+        ['Online', 'Hybrid', 'Local'].forEach(m => {
+            const card = document.getElementById('homeModeCard-' + m);
+            if (card) {
+                card.classList.toggle('active', m === mode);
+            }
         });
-        const desc = modeDescs[m] || '';
-        const ruleModeDesc = document.getElementById('ruleModeDesc');
-        const homeModeDesc = document.getElementById('homeModeDesc');
-        if (ruleModeDesc) ruleModeDesc.innerHTML = desc;
-        if (homeModeDesc) homeModeDesc.innerHTML = desc;
     }
 
-    function quickSetMode(m) { setMode(m); }
-
-    async function saveHomeModeOnly() {
-        await saveAllRules();
+    // ── 전체 ON/OFF 토글 ──
+    async function togglePower() {
+        isEnabled = document.getElementById('globalPowerSwitch').checked;
+        document.getElementById('sidebarPowerText').innerText = isEnabled ? '실행 중 (ON)' : '일시정지 (OFF)';
+        document.getElementById('statPowerStatus').innerText = isEnabled ? 'ON' : 'OFF';
+        document.getElementById('statPowerStatus').className = 'value ' + (isEnabled ? 'green' : 'red');
+        await saveRulesSettings();
     }
 
-    // ── 룰 테이블 ──
-    function renderRulesTable() {
-        const tbody = document.getElementById('rulesTableBody');
-        if (!tbody) return;
+    // ── 로컬 규칙 렌더링 ──
+    function renderLocalRulesTable() {
+        const tbody = document.getElementById('localRulesTableBody');
         tbody.innerHTML = '';
-        if (localRules.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-tertiary);padding:20px">등록된 로컬 룰이 없습니다.</td></tr>';
+
+        if (!localRules || localRules.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--text-tertiary);">등록된 로컬 규칙이 없습니다. 위 입력창에서 추가해보세요.</td></tr>';
             return;
         }
+
         localRules.forEach((rule, idx) => {
             const tr = document.createElement('tr');
+            const patternText = rule.Pattern || rule.pattern || '';
+            const descText = rule.Description || rule.description || '-';
+            const isChecked = (rule.Enabled !== undefined) ? rule.Enabled : (rule.enabled !== false);
+
             tr.innerHTML = `
-                <td><code style="font-size:12px">${escapeHtml(rule.pattern)}</code></td>
-                <td style="color:var(--text-secondary)">${escapeHtml(rule.description || '-')}</td>
-                <td style="text-align:center">
-                    <label class="toggle-switch" style="margin:0 auto">
-                        <input type="checkbox" ${rule.enabled ? 'checked' : ''} onchange="localRules[${idx}].enabled=this.checked">
-                        <span class="toggle-slider"></span>
+                <td><strong style="color:var(--text-primary);">${escapeHtml(patternText)}</strong></td>
+                <td style="color:var(--text-secondary);">${escapeHtml(descText)}</td>
+                <td style="text-align:center;">
+                    <label class="switch" style="margin:0 auto;">
+                        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleLocalRule(${idx}, this.checked)">
+                        <span class="slider"></span>
                     </label>
                 </td>
-                <td style="text-align:center"><button class="btn-sm btn-red" onclick="deleteRule(${idx})">삭제</button></td>
+                <td style="text-align:center;">
+                    <button class="btn-del" onclick="deleteLocalRule(${idx})">삭제</button>
+                </td>
             `;
             tbody.appendChild(tr);
         });
     }
 
-    function addLocalRule() {
-        const pat = document.getElementById('newPattern').value.trim();
-        const desc = document.getElementById('newDesc').value.trim();
-        if (!pat) { toast('차단 패턴을 입력하세요.'); return; }
-        localRules.push({ pattern:pat, description:desc, enabled:true });
-        document.getElementById('newPattern').value = '';
-        document.getElementById('newDesc').value = '';
-        renderRulesTable();
-    }
-
-    function deleteRule(idx) {
-        if (confirm('이 룰을 삭제하시겠습니까?')) {
-            localRules.splice(idx, 1);
-            renderRulesTable();
+    function toggleLocalRule(idx, val) {
+        if (localRules[idx]) {
+            localRules[idx].Enabled = val;
+            localRules[idx].enabled = val;
         }
     }
 
-    // ── 임베드 도메인 ──
-    function renderEmbedParents() {
-        const c = document.getElementById('embedParentList');
-        if (!c) return;
-        c.innerHTML = '';
-        if (allowedEmbedParents.length === 0) {
-            c.innerHTML = '<span style="font-size:12px;color:var(--text-tertiary)">등록된 허용 도메인이 없습니다.</span>';
+    function addLocalRuleItem() {
+        const patInput = document.getElementById('newRulePattern');
+        const descInput = document.getElementById('newRuleDesc');
+        const pat = patInput.value.trim();
+        const desc = descInput.value.trim();
+
+        if (!pat) {
+            showToast('차단 패턴을 입력해주세요.');
             return;
         }
-        allowedEmbedParents.forEach((d, i) => {
-            const tag = document.createElement('span');
-            tag.className = 'tag';
-            tag.innerHTML = `<strong>${escapeHtml(d)}</strong><span class="del" onclick="deleteEmbedParent(${i})">×</span>`;
-            c.appendChild(tag);
+
+        localRules.push({
+            Pattern: pat,
+            Description: desc,
+            Enabled: true
+        });
+
+        patInput.value = '';
+        descInput.value = '';
+        renderLocalRulesTable();
+        showToast('로컬 규칙이 목록에 추가되었습니다. [모든 규칙 변경사항 저장]을 누르면 적용됩니다.');
+    }
+
+    function deleteLocalRule(idx) {
+        if (confirm('이 규칙을 삭제하시겠습니까?')) {
+            localRules.splice(idx, 1);
+            renderLocalRulesTable();
+        }
+    }
+
+    // ── 온라인 룰 렌더링 ──
+    function renderOnlineRulesTable() {
+        const tbody = document.getElementById('onlineRulesTableBody');
+        const headerCount = document.getElementById('onlineRulesHeaderCount');
+        tbody.innerHTML = '';
+
+        headerCount.innerText = onlineRules.length;
+
+        if (!onlineRules || onlineRules.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:24px; color:var(--text-tertiary);">온라인 규칙이 없습니다. [원격 동기화]를 진행해보세요.</td></tr>';
+            return;
+        }
+
+        onlineRules.forEach(rule => {
+            const tr = document.createElement('tr');
+            const pat = rule.Pattern || rule.pattern || '';
+            const desc = rule.Description || rule.description || '-';
+            tr.innerHTML = `
+                <td><strong>${escapeHtml(pat)}</strong></td>
+                <td style="color:var(--text-secondary);">${escapeHtml(desc)}</td>
+                <td style="text-align:center;"><span class="badge badge-blocked">차단 중</span></td>
+            `;
+            tbody.appendChild(tr);
         });
     }
 
-    function addEmbedParent() {
-        const v = document.getElementById('newEmbedParent').value.trim().toLowerCase();
-        if (!v) { toast('도메인을 입력하세요.'); return; }
-        if (!allowedEmbedParents.includes(v)) {
-            allowedEmbedParents.push(v);
-            document.getElementById('newEmbedParent').value = '';
-            renderEmbedParents();
+    // ── 인강 임베드 태그 ──
+    function renderEmbedTags() {
+        const container = document.getElementById('embedTagContainer');
+        container.innerHTML = '';
+
+        if (!allowedEmbedParents || allowedEmbedParents.length === 0) {
+            container.innerHTML = '<span style="font-size:12px; color:var(--text-tertiary);">등록된 허용 도메인이 없습니다.</span>';
+            return;
+        }
+
+        allowedEmbedParents.forEach((dom, idx) => {
+            const span = document.createElement('span');
+            span.className = 'parent-tag';
+            span.innerHTML = `<span>${escapeHtml(dom)}</span><span class="remove-btn" onclick="removeEmbedTag(${idx})">×</span>`;
+            container.appendChild(span);
+        });
+    }
+
+    function addEmbedTagItem() {
+        const input = document.getElementById('newEmbedInput');
+        const val = input.value.trim().toLowerCase();
+        if (!val) {
+            showToast('도메인 주소를 입력해주세요.');
+            return;
+        }
+
+        if (!allowedEmbedParents.includes(val)) {
+            allowedEmbedParents.push(val);
+            input.value = '';
+            renderEmbedTags();
+            showToast('허용 도메인이 추가되었습니다. [변경사항 저장]을 눌러주세요.');
+        } else {
+            showToast('이미 등록된 도메인입니다.');
         }
     }
 
-    function deleteEmbedParent(idx) {
+    function removeEmbedTag(idx) {
         allowedEmbedParents.splice(idx, 1);
-        renderEmbedParents();
+        renderEmbedTags();
     }
 
-    // ── 저장 ──
-    async function saveAllRules() {
+    // ── 모든 설정 서버에 일괄 저장 ──
+    async function saveRulesSettings() {
+        const gitHubUrl = document.getElementById('syncGithubUrlInput')?.value?.trim();
+        const syncInterval = parseInt(document.getElementById('syncIntervalSelect')?.value || '10');
+
         try {
-            const r = await fetch('/api/dashboard/save-rules', {
-                method:'POST',
-                headers:{'Content-Type':'application/json','X-Dashboard-Token':currentToken},
-                body: JSON.stringify({ isEnabled, ruleMode:selectedMode, localRules, allowedEmbedParents, gitHubRulesUrl: document.getElementById('syncUrl')?.value?.trim() })
+            const res = await fetch('/api/dashboard/save-rules', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Dashboard-Token': currentToken
+                },
+                body: JSON.stringify({
+                    isEnabled: isEnabled,
+                    ruleMode: selectedMode,
+                    localRules: localRules,
+                    allowedEmbedParents: allowedEmbedParents,
+                    gitHubRulesUrl: gitHubUrl,
+                    syncIntervalMinutes: syncInterval
+                })
             });
-            const d = await r.json();
-            if (d.success) { toast('✅ 설정이 저장되었습니다!'); await loadConfig(); }
-            else toast('❌ 저장 실패: ' + (d.message || ''));
-        } catch { toast('저장 중 오류가 발생했습니다.'); }
+            const data = await res.json();
+            if (data.success) {
+                showToast('✅ 설정이 안전하게 저장되었으며 즉시 적용되었습니다!');
+                await loadConfigData();
+            } else {
+                showToast('❌ 저장 실패: ' + (data.message || ''));
+            }
+        } catch {
+            showToast('통신 오류로 설정을 저장하지 못했습니다.');
+        }
     }
 
-    async function saveSyncUrl() {
-        await saveAllRules();
-    }
-
-    async function saveSyncInterval() {
-        const v = document.getElementById('syncInterval').value;
-        try {
-            const r = await fetch('/api/dashboard/save-rules', {
-                method:'POST',
-                headers:{'Content-Type':'application/json','X-Dashboard-Token':currentToken},
-                body: JSON.stringify({ isEnabled, ruleMode:selectedMode, localRules, allowedEmbedParents, syncIntervalMinutes: parseInt(v) })
-            });
-            const d = await r.json();
-            if (d.success) toast('✅ 동기화 주기가 저장되었습니다!');
-            else toast('❌ ' + (d.message || ''));
-        } catch { toast('저장 중 오류'); }
-    }
-
+    // ── 즉시 동기화 ──
     async function syncNow() {
         try {
-            const r = await fetch('/api/dashboard/sync-now', { method:'POST', headers:{'X-Dashboard-Token':currentToken} });
-            const d = await r.json();
-            toast('🔄 ' + (d.message || '동기화 요청 완료'));
-            setTimeout(() => loadConfig(), 2000);
-        } catch { toast('동기화 요청 실패'); }
+            const res = await fetch('/api/dashboard/sync-now', {
+                method: 'POST',
+                headers: { 'X-Dashboard-Token': currentToken }
+            });
+            const data = await res.json();
+            showToast('🔄 ' + (data.message || 'GitHub 동기화를 시작했습니다.'));
+            setTimeout(loadConfigData, 2000);
+        } catch {
+            showToast('동기화 요청 실패');
+        }
     }
 
-    // ── 전체 ON/OFF ──
-    async function toggleGlobalPower() {
-        isEnabled = document.getElementById('globalToggle').checked;
-        document.getElementById('sidebarPowerLabel').innerText = isEnabled ? '🟢 필터 ON' : '🔴 필터 OFF';
-        await saveAllRules();
-    }
-
-    // ── 방문 로그 ──
-    async function loadRecentLog() {
+    // ── 홈 최근 로그 10건 ──
+    async function loadHomeRecentLogs() {
         try {
-            const r = await fetch('/api/dashboard/visit-log?page=1', { headers:{'X-Dashboard-Token':currentToken} });
-            const d = await r.json();
-            const tbody = document.getElementById('recentLogBody');
-            if (!tbody) return;
+            const res = await fetch('/api/dashboard/visit-log?page=1', {
+                headers: { 'X-Dashboard-Token': currentToken }
+            });
+            const data = await res.json();
+            const tbody = document.getElementById('homeRecentLogTable');
             tbody.innerHTML = '';
-            const entries = (d.entries || []).slice(0, 10);
-            if (entries.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-tertiary);padding:16px">아직 기록이 없습니다.</td></tr>';
+
+            const list = data.entries || [];
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:20px; color:var(--text-tertiary);">아직 접속 기록이 없습니다.</td></tr>';
                 return;
             }
-            const blockedCount = (d.entries || []).filter(e => e.blocked).length;
-            const allowedCount = (d.entries || []).filter(e => !e.blocked).length;
-            document.getElementById('statBlocked').innerText = blockedCount;
-            document.getElementById('statAllowed').innerText = allowedCount;
-            entries.forEach(e => {
+
+            // 카운트 계산
+            let blockedCount = 0;
+            let allowedCount = 0;
+            list.forEach(item => {
+                if (item.Blocked || item.blocked) blockedCount++;
+                else allowedCount++;
+            });
+            document.getElementById('statBlockedCount').innerText = blockedCount + '건';
+            document.getElementById('statAllowedCount').innerText = allowedCount + '건';
+
+            list.slice(0, 10).forEach(entry => {
                 const tr = document.createElement('tr');
+                const isBlk = entry.Blocked || entry.blocked;
+                const isEmb = entry.EmbedAllowed || entry.embedAllowed;
+                const host = entry.Host || entry.host || '-';
+                const time = formatTime(entry.Timestamp || entry.timestamp);
+
+                let badgeHtml = '<span class="badge badge-allowed">정상 허용</span>';
+                if (isBlk) {
+                    badgeHtml = '<span class="badge badge-blocked">차단됨</span>';
+                } else if (isEmb) {
+                    badgeHtml = '<span class="badge badge-embed">인강 예외 허용</span>';
+                }
+
                 tr.innerHTML = `
-                    <td style="font-size:12px;color:var(--text-secondary)">${formatTime(e.timestamp)}</td>
-                    <td style="font-size:13px;font-weight:700">${escapeHtml(e.host)}</td>
-                    <td>${e.blocked ? '<span class="badge badge-red">차단</span>' : (e.embedAllowed ? '<span class="badge badge-blue">임베드허용</span>' : '<span class="badge badge-green">허용</span>')}</td>
+                    <td style="color:var(--text-secondary); font-size:12px;">${time}</td>
+                    <td><strong>${escapeHtml(host)}</strong></td>
+                    <td>${badgeHtml}</td>
                 `;
                 tbody.appendChild(tr);
             });
         } catch {}
     }
 
-    async function loadLog(page) {
+    // ── 전체 방문 로그 페이징 조회 ──
+    async function loadLogData(page) {
         currentLogPage = page;
-        const host = document.getElementById('logFilterHost')?.value?.trim() || '';
-        const blocked = document.getElementById('logFilterBlocked')?.value || '';
-        let url = `/api/dashboard/visit-log?page=${page}`;
-        if (host) url += '&host=' + encodeURIComponent(host);
-        if (blocked) url += '&blocked=' + blocked;
+        const hostFilter = document.getElementById('logFilterHost')?.value?.trim() || '';
+        const typeFilter = document.getElementById('logFilterType')?.value || '';
+
+        let query = `/api/dashboard/visit-log?page=${page}`;
+        if (hostFilter) query += '&host=' + encodeURIComponent(hostFilter);
+        if (typeFilter) query += '&blocked=' + typeFilter;
+
         try {
-            const r = await fetch(url, { headers:{'X-Dashboard-Token':currentToken} });
-            const d = await r.json();
-            const tbody = document.getElementById('logTableBody');
-            if (!tbody) return;
+            const res = await fetch(query, {
+                headers: { 'X-Dashboard-Token': currentToken }
+            });
+            const data = await res.json();
+            const tbody = document.getElementById('fullLogTable');
             tbody.innerHTML = '';
-            const entries = d.entries || [];
-            if (entries.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-tertiary);padding:20px">기록이 없습니다.</td></tr>';
+
+            const list = data.entries || [];
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-tertiary);">조건에 맞는 접속 기록이 없습니다.</td></tr>';
             } else {
-                entries.forEach(e => {
+                list.forEach(entry => {
                     const tr = document.createElement('tr');
+                    const isBlk = entry.Blocked || entry.blocked;
+                    const isEmb = entry.EmbedAllowed || entry.embedAllowed;
+                    const host = entry.Host || entry.host || '';
+                    const url = entry.Url || entry.url || '';
+                    const rule = entry.MatchedRule || entry.matchedRule || '-';
+                    const time = formatTime(entry.Timestamp || entry.timestamp);
+
+                    let badgeHtml = '<span class="badge badge-allowed">정상 허용</span>';
+                    if (isBlk) {
+                        badgeHtml = '<span class="badge badge-blocked">차단됨</span>';
+                    } else if (isEmb) {
+                        badgeHtml = '<span class="badge badge-embed">인강 예외</span>';
+                    }
+
                     tr.innerHTML = `
-                        <td style="font-size:12px;white-space:nowrap">${formatTime(e.timestamp)}</td>
-                        <td style="font-weight:700;font-size:13px">${escapeHtml(e.host)}</td>
-                        <td style="font-size:12px;color:var(--text-secondary);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(e.url)}">${escapeHtml(e.url)}</td>
-                        <td>${e.blocked ? '<span class="badge badge-red">차단</span>' : (e.embedAllowed ? '<span class="badge badge-blue">임베드</span>' : '<span class="badge badge-green">허용</span>')}</td>
-                        <td style="font-size:12px;color:var(--text-tertiary)">${escapeHtml(e.matchedRule || '-')}</td>
+                        <td style="font-size:12px; color:var(--text-secondary);">${time}</td>
+                        <td><strong>${escapeHtml(host)}</strong></td>
+                        <td style="font-size:12px; color:var(--text-secondary); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(url)}">${escapeHtml(url)}</td>
+                        <td>${badgeHtml}</td>
+                        <td style="font-size:12px; color:var(--text-tertiary);">${escapeHtml(rule)}</td>
+                        <td style="text-align:center;">
+                            ${!isBlk ? `<button class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:11px;" onclick="quickBlockHost('${escapeHtml(host)}')">차단 추가</button>` : '-'}
+                        </td>
                     `;
                     tbody.appendChild(tr);
                 });
             }
-            const total = d.total || 0;
-            const pageSize = d.pageSize || 100;
-            const totalPages = Math.ceil(total / pageSize);
-            document.getElementById('logPageInfo').innerText = `${page} / ${Math.max(1, totalPages)} 페이지 (총 ${total}건)`;
-            document.getElementById('logPrevBtn').disabled = page <= 1;
-            document.getElementById('logNextBtn').disabled = page >= totalPages;
-        } catch { toast('로그를 불러오지 못했습니다.'); }
+
+            // 페이저
+            const total = data.total || 0;
+            const pageSize = data.pageSize || 100;
+            const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+            document.getElementById('logPageText').innerText = `${page} / ${totalPages} 페이지 (총 ${total}건)`;
+            document.getElementById('btnLogPrev').disabled = page <= 1;
+            document.getElementById('btnLogNext').disabled = page >= totalPages;
+        } catch {
+            showToast('로그 데이터를 불러오지 못했습니다.');
+        }
     }
 
-    async function clearLog() {
-        if (!confirm('모든 방문 로그를 삭제하시겠습니까?')) return;
+    function quickBlockHost(host) {
+        if (!host) return;
+        switchTab('rules');
+        document.getElementById('newRulePattern').value = '*.' + host + '/*';
+        document.getElementById('newRuleDesc').value = host + ' 사이트 차단';
+        showToast(host + ' 주소가 입력창에 자동으로 채워졌습니다. [+ 규칙 추가]를 누르세요.');
+    }
+
+    async function clearAllLogs() {
+        if (!confirm('정말로 저장된 모든 방문 사이트 기록을 비우시겠습니까?')) return;
         try {
-            const r = await fetch('/api/dashboard/clear-log', { method:'POST', headers:{'X-Dashboard-Token':currentToken} });
-            const d = await r.json();
-            if (d.success) { toast('🗑 로그가 삭제되었습니다.'); loadLog(1); }
-        } catch { toast('삭제 실패'); }
+            const res = await fetch('/api/dashboard/clear-log', {
+                method: 'POST',
+                headers: { 'X-Dashboard-Token': currentToken }
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('방문 기록이 모두 비워졌습니다.');
+                loadLogData(1);
+            }
+        } catch {
+            showToast('기록 삭제 실패');
+        }
     }
 
     // ── 비밀번호 변경 ──
-    async function changePassword() {
-        const curPw = document.getElementById('curPw').value;
-        const newPw = document.getElementById('newPw').value;
-        const cfm = document.getElementById('newPwConfirm').value;
-        const msg = document.getElementById('pwMsg');
-        if (!curPw || !newPw) { msg.style.color='var(--live-red)'; msg.innerText='현재 비밀번호와 새 비밀번호를 모두 입력하세요.'; return; }
-        if (newPw !== cfm) { msg.style.color='var(--live-red)'; msg.innerText='새 비밀번호가 일치하지 않습니다.'; return; }
+    async function doChangePassword() {
+        const cur = document.getElementById('pwCurrent').value;
+        const newPw = document.getElementById('pwNew').value;
+        const cfm = document.getElementById('pwConfirm').value;
+        const msg = document.getElementById('pwChangeMsg');
+
+        if (!cur || !newPw) {
+            msg.style.color = 'var(--live-red)';
+            msg.innerText = '현재 비밀번호와 새 비밀번호를 모두 입력하세요.';
+            return;
+        }
+        if (newPw !== cfm) {
+            msg.style.color = 'var(--live-red)';
+            msg.innerText = '새 비밀번호 확인이 일치하지 않습니다.';
+            return;
+        }
+
         try {
-            const r = await fetch('/api/dashboard/change-password', {
-                method:'POST',
-                headers:{'Content-Type':'application/json','X-Dashboard-Token':currentToken},
-                body: JSON.stringify({ currentPassword:curPw, newPassword:newPw })
+            const res = await fetch('/api/dashboard/change-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Dashboard-Token': currentToken
+                },
+                body: JSON.stringify({ currentPassword: cur, newPassword: newPw })
             });
-            const d = await r.json();
-            if (d.success) {
-                msg.style.color='var(--naver-green)'; msg.innerText=d.message;
-                document.getElementById('curPw').value='';
-                document.getElementById('newPw').value='';
-                document.getElementById('newPwConfirm').value='';
-            } else { msg.style.color='var(--live-red)'; msg.innerText=d.message||'변경 실패'; }
-        } catch { msg.style.color='var(--live-red)'; msg.innerText='서버 통신 오류'; }
+            const data = await res.json();
+            if (data.success) {
+                msg.style.color = 'var(--naver-green)';
+                msg.innerText = data.message;
+                document.getElementById('pwCurrent').value = '';
+                document.getElementById('pwNew').value = '';
+                document.getElementById('pwConfirm').value = '';
+            } else {
+                msg.style.color = 'var(--live-red)';
+                msg.innerText = data.message || '변경 실패';
+            }
+        } catch {
+            msg.style.color = 'var(--live-red)';
+            msg.innerText = '서버 통신 오류';
+        }
     }
 
     // ── 유틸 ──
-    function formatTime(ts) {
-        if (!ts) return '-';
-        const d = new Date(ts);
-        return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+    function formatTime(isoStr) {
+        if (!isoStr) return '-';
+        try {
+            const d = new Date(isoStr);
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            const ss = String(d.getSeconds()).padStart(2, '0');
+            return `${m}/${day} ${hh}:${mm}:${ss}`;
+        } catch {
+            return isoStr;
+        }
     }
 
     function escapeHtml(str) {
-        return (str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
+        return (str || '').replace(/[&<>"']/g, m => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[m]);
     }
 
-    function toast(msg) {
+    function showToast(msg) {
         const t = document.getElementById('toast');
         t.innerText = msg;
         t.className = 'show';
-        setTimeout(() => { t.className = ''; }, 3000);
+        setTimeout(() => { t.className = ''; }, 3200);
     }
 </script>
 </body>
 </html>
 """;
     }
+
 
     private class UnlockRequest
     {
