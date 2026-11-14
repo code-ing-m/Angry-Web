@@ -13,6 +13,7 @@ public class ProxyFilterEngine : IDisposable
     private readonly ConfigManager _configManager;
     private readonly PatternMatcher _patternMatcher;
     private readonly TemporaryAccessManager _accessManager;
+    private readonly SiteVisitLogger _visitLogger;
     private readonly ProxyServer _proxyServer;
     private ExplicitProxyEndPoint? _explicitEndPoint;
     private CancellationTokenSource? _watchdogCts;
@@ -27,12 +28,14 @@ public class ProxyFilterEngine : IDisposable
         ILogger<ProxyFilterEngine> logger,
         ConfigManager configManager,
         PatternMatcher patternMatcher,
-        TemporaryAccessManager accessManager)
+        TemporaryAccessManager accessManager,
+        SiteVisitLogger visitLogger)
     {
         _logger = logger;
         _configManager = configManager;
         _patternMatcher = patternMatcher;
         _accessManager = accessManager;
+        _visitLogger = visitLogger;
 
         _proxyServer = new ProxyServer();
         // Trust Root Certificate automatically on Windows
@@ -258,6 +261,7 @@ public class ProxyFilterEngine : IDisposable
         // Check if temporarily allowed by password bypass
         if (_accessManager.IsAllowed(fullUrl) || _accessManager.IsAllowed(host))
         {
+            _visitLogger.Record(fullUrl, host, blocked: false);
             return;
         }
 
@@ -265,6 +269,7 @@ public class ProxyFilterEngine : IDisposable
         if (IsAllowedEmbedRequest(e))
         {
             _logger.LogInformation("[EMBED ALLOWED] Allowed media request for {Url} from parent site", fullUrl);
+            _visitLogger.Record(fullUrl, host, blocked: false, embedAllowed: true);
             return;
         }
 
@@ -272,6 +277,7 @@ public class ProxyFilterEngine : IDisposable
         if (_patternMatcher.IsBlocked(fullUrl, out var matchedRule))
         {
             _logger.LogInformation("[BLOCKED] {Url} matched rule: {Rule}", fullUrl, matchedRule);
+            _visitLogger.Record(fullUrl, host, blocked: true, matchedRule: matchedRule);
 
             // Redirect to local block page
             var blockPort = _configManager.CurrentConfig.BlockPagePort;
@@ -293,6 +299,14 @@ public class ProxyFilterEngine : IDisposable
                     { "Location", new HttpHeader("Location", redirectUrl) },
                     { "Content-Type", new HttpHeader("Content-Type", "text/html; charset=utf-8") }
                 });
+        }
+        else
+        {
+            // 차단되지 않은 일반 허용 사이트도 기록 (GET 요청만, 너무 많은 리소스 요청 제외)
+            if (e.HttpClient.Request.Method == "GET" && !fullUrl.Contains("favicon") && !fullUrl.EndsWith(".js") && !fullUrl.EndsWith(".css") && !fullUrl.EndsWith(".png") && !fullUrl.EndsWith(".jpg") && !fullUrl.EndsWith(".gif") && !fullUrl.EndsWith(".woff2"))
+            {
+                _visitLogger.Record(fullUrl, host, blocked: false);
+            }
         }
     }
 

@@ -205,7 +205,7 @@ public class ConfigManager
         return true;
     }
 
-    public void UpdateRuleSettings(string mode, List<RuleDefinition> localRules, string? gitHubUrl, bool? isEnabled = null, List<string>? allowedEmbedParents = null)
+    public void UpdateRuleSettings(string mode, List<RuleDefinition> localRules, string? gitHubUrl, bool? isEnabled = null, List<string>? allowedEmbedParents = null, int? syncIntervalMinutes = null)
     {
         _config.RuleMode = mode;
         _config.LocalRules = localRules;
@@ -216,6 +216,10 @@ public class ConfigManager
         if (allowedEmbedParents != null)
         {
             _config.AllowedEmbedParents = allowedEmbedParents;
+        }
+        if (syncIntervalMinutes.HasValue && syncIntervalMinutes.Value > 0)
+        {
+            _config.SyncIntervalMinutes = syncIntervalMinutes.Value;
         }
         if (!string.IsNullOrWhiteSpace(gitHubUrl))
         {
