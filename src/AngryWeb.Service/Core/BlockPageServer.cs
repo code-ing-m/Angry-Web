@@ -2244,6 +2244,9 @@ public class BlockPageServer
         const tbody = document.getElementById('localRulesTableBody');
         tbody.innerHTML = '';
 
+        // 유효하지 않거나 빈 패턴 제거
+        localRules = (localRules || []).filter(r => (r.Pattern || r.pattern || '').trim().length > 0);
+
         if (!localRules || localRules.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:24px; color:var(--text-tertiary);">등록된 로컬 규칙이 없습니다. 위 입력창에서 추가해보세요.</td></tr>';
             return;
@@ -2251,8 +2254,8 @@ public class BlockPageServer
 
         localRules.forEach((rule, idx) => {
             const tr = document.createElement('tr');
-            const patternText = rule.Pattern || rule.pattern || '';
-            const descText = rule.Description || rule.description || '-';
+            const patternText = (rule.Pattern || rule.pattern || '').trim();
+            const descText = (rule.Description || rule.description || '-').trim() || '-';
             const isChecked = (rule.Enabled !== undefined) ? rule.Enabled : (rule.enabled !== false);
 
             tr.innerHTML = `

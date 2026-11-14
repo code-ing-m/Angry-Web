@@ -339,10 +339,20 @@ public class ProxyFilterEngine : IDisposable
         var referer = e.HttpClient.Request.Headers.FirstOrDefault(h => h.Name.Equals("Referer", StringComparison.OrdinalIgnoreCase))?.Value;
         var origin = e.HttpClient.Request.Headers.FirstOrDefault(h => h.Name.Equals("Origin", StringComparison.OrdinalIgnoreCase))?.Value;
         var fullUrl = e.HttpClient.Request.Url;
-
-        // 1. googlevideo 스트리밍 청크는 referer가 비어있을 수 있으므로 유튜브 재생 도메인은 허용
         var host = e.HttpClient.Request.RequestUri.Host.ToLowerInvariant();
-        if (host.Contains("googlevideo.com") || host.Contains("ytimg.com"))
+
+        // 0. 유튜브 일반 시청 페이지(/watch, /shorts)는 임베드 예외로 허용되지 않음 (차단 유지)
+        if (fullUrl.Contains("/watch", StringComparison.OrdinalIgnoreCase) || 
+            fullUrl.Contains("/shorts", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // 1. googlevideo 스트리밍 청크 및 미디어 리소스는 인강 임베드 활성화 시 전체 허용
+        if (host.Contains("googlevideo.com") || 
+            host.Contains("ytimg.com") || 
+            host.Contains("ggpht.com") || 
+            host.Contains("gvt1.com"))
         {
             return true;
         }
@@ -350,16 +360,45 @@ public class ProxyFilterEngine : IDisposable
         var allowedParents = _configManager.CurrentConfig.AllowedEmbedParents ?? new List<string>();
         if (allowedParents.Count == 0) return false;
 
+        // 2. 유튜브 임베드 플레이어 iframe 내부에서 발생하는 서브리퀘스트 (JS, API, 폰트, 통계 등)
+        // 임베드 플레이어 내부 서브리퀘스트는 Referer가 https://www.youtube.com/embed/... 또는 https://www.youtube-nocookie.com/embed/... 입니다.
+        if (host.Contains("youtube.com") || host.Contains("youtube-nocookie.com") || host.Contains("youtu.be"))
+        {
+            if (!string.IsNullOrEmpty(referer) && 
+                (referer.Contains("youtube.com/embed/", StringComparison.OrdinalIgnoreCase) || 
+                 referer.Contains("youtube-nocookie.com/embed/", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            // 통계 및 핑 요청 (el=embedded 식별자)
+            if (fullUrl.Contains("el=embedded", StringComparison.OrdinalIgnoreCase) ||
+                fullUrl.Contains("WEB_EMBEDDED_PLAYER", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        // 3. 등록된 부모 인강 사이트(AllowedEmbedParents)에서 직접 호출한 iframe 및 리소스인지 확인
         foreach (var parent in allowedParents)
         {
             if (string.IsNullOrWhiteSpace(parent)) continue;
             var cleanParent = parent.Trim().ToLowerInvariant();
 
+            // (a) Referer에 인강 사이트 도메인이 포함된 경우 (예: Referer: https://www.nineschool.co.kr/...)
             if (!string.IsNullOrEmpty(referer) && referer.ToLowerInvariant().Contains(cleanParent))
             {
                 return true;
             }
+
+            // (b) Origin에 인강 사이트 도메인이 포함된 경우
             if (!string.IsNullOrEmpty(origin) && origin.ToLowerInvariant().Contains(cleanParent))
+            {
+                return true;
+            }
+
+            // (c) URL 파라미터(euri, widget_referrer, origin 등)에 인강 사이트 도메인이 명시된 경우
+            if (fullUrl.ToLowerInvariant().Contains(cleanParent))
             {
                 return true;
             }
