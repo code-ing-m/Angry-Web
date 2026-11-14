@@ -25,13 +25,16 @@ public class FilterConfig
     // 인강 사이트 등 특정 부모 사이트에서 요청하는 임베드/미디어 예외 허용 도메인 목록
     public List<string> AllowedEmbedParents { get; set; } = new()
     {
+        "nineschool.co.kr",
         "ebsi.co.kr",
         "ebs.co.kr",
         "megastudy.net",
         "etoos.com",
         "mimacstudy.com",
         "daesungmimac.com",
-        "emath.co.kr"
+        "emath.co.kr",
+        "wedorang.com",
+        "edunet.net"
     };
 
     // 깃허브에서 가져온 원격 룰 캐시

@@ -118,22 +118,45 @@ public class ConfigManager
                     _config = loaded;
                     _config.LocalRules ??= new List<RuleDefinition>();
                     _config.Rules ??= new List<RuleDefinition>();
-                    _config.AllowedEmbedParents ??= new List<string>
+                    _config.AllowedEmbedParents ??= new List<string>();
+
+                    var defaultParents = new[]
                     {
-                        "ebsi.co.kr", "ebs.co.kr", "megastudy.net", "etoos.com", "mimacstudy.com", "daesungmimac.com", "emath.co.kr"
+                        "nineschool.co.kr", "ebsi.co.kr", "ebs.co.kr", "megastudy.net",
+                        "etoos.com", "mimacstudy.com", "daesungmimac.com", "emath.co.kr",
+                        "wedorang.com", "edunet.net"
                     };
+                    bool configChanged = false;
+                    foreach (var p in defaultParents)
+                    {
+                        if (!_config.AllowedEmbedParents.Any(x => x.Equals(p, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            _config.AllowedEmbedParents.Add(p);
+                            configChanged = true;
+                        }
+                    }
+
+                    // 빈 룰 패턴 제거
+                    int prevLocalCount = _config.LocalRules.Count;
+                    _config.LocalRules = _config.LocalRules.Where(r => !string.IsNullOrWhiteSpace(r.Pattern)).ToList();
+                    if (_config.LocalRules.Count != prevLocalCount) configChanged = true;
 
                     // 비상 복구 키가 없으면 기본 비상 키 생성
                     if (string.IsNullOrEmpty(_config.RecoveryKeyHash))
                     {
                         _config.RecoveryKeyHash = PasswordHelper.HashPassword("ANGRY-SAFE-2026-KEY");
-                        SaveLocalConfig();
+                        configChanged = true;
                     }
 
                     // 구버전 평문 비밀번호가 저장되어 있다면 자동으로 SHA-256 솔트 해시로 변환하여 파일 저장
                     if (!string.IsNullOrEmpty(_config.MasterPasswordHash) && !_config.MasterPasswordHash.StartsWith("sha256:"))
                     {
                         _config.MasterPasswordHash = PasswordHelper.HashPassword(_config.MasterPasswordHash);
+                        configChanged = true;
+                    }
+
+                    if (configChanged)
+                    {
                         SaveLocalConfig();
                     }
 
@@ -208,7 +231,9 @@ public class ConfigManager
     public void UpdateRuleSettings(string mode, List<RuleDefinition> localRules, string? gitHubUrl, bool? isEnabled = null, List<string>? allowedEmbedParents = null, int? syncIntervalMinutes = null)
     {
         _config.RuleMode = mode;
-        _config.LocalRules = localRules;
+        _config.LocalRules = (localRules ?? new List<RuleDefinition>())
+            .Where(r => !string.IsNullOrWhiteSpace(r.Pattern))
+            .ToList();
         if (isEnabled.HasValue)
         {
             _config.IsEnabled = isEnabled.Value;
@@ -228,7 +253,7 @@ public class ConfigManager
 
         SaveLocalConfig();
         ConfigUpdated?.Invoke();
-        _logger.LogInformation("Rule settings updated. Mode: {Mode}, IsEnabled: {Enabled}, LocalRules: {Count}", mode, _config.IsEnabled, localRules.Count);
+        _logger.LogInformation("Rule settings updated. Mode: {Mode}, IsEnabled: {Enabled}, LocalRules: {Count}", mode, _config.IsEnabled, _config.LocalRules.Count);
     }
 
     public async Task SyncWithGitHubAsync(CancellationToken ct = default)
